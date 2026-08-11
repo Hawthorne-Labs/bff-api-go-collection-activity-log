@@ -94,6 +94,48 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 	c.JSON(http.StatusCreated, result)
 }
 
+// CreateLoanActivity handles POST /api/v1/collections/loans/:loanId/activities
+func (h *ActivitiesHandler) CreateLoanActivity(c *gin.Context) {
+	ctx := middleware.GetCognitoContext(c)
+	if ctx == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es valido."}})
+		return
+	}
+
+	loanID := c.Param("loanId")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": domain.ActivityCreateFailed, "message": "loan_id es requerido."}})
+		return
+	}
+
+	traceID, _ := c.Get("trace_id")
+	tenantID, _ := c.Get("tenant_id")
+
+	var payload map[string]any
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": domain.ActivityCreateFailed, "message": "Payload invalido."}})
+		return
+	}
+	payload["loan_id"] = loanID
+
+	requestID := c.GetHeader("X-Request-Id")
+	correlationID := c.GetHeader("X-Correlation-Id")
+	traceparent := c.GetHeader("traceparent")
+	idempotencyKey := c.GetHeader("Idempotency-Key")
+
+	result, err := h.activities.CreateActivity(c.Request.Context(), payload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
+	if err != nil {
+		if bizErr, ok := err.(*domain.BusinessError); ok {
+			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.ActivityCreateFailed, "message": "No se pudo crear la actividad."}})
+		return
+	}
+
+	c.JSON(http.StatusCreated, result)
+}
+
 // CreateActivityBatch handles POST /api/v1/collections/activities/batch
 func (h *ActivitiesHandler) CreateActivityBatch(c *gin.Context) {
 	ctx := middleware.GetCognitoContext(c)

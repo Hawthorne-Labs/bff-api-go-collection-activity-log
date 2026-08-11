@@ -49,16 +49,20 @@ func NewCryptoBFFClient(cfg *config.Config) *CryptoBFFClient {
 // Returns the encrypted fields and sets response headers for the client.
 func (c *CryptoBFFClient) EncryptFields(
 	ctx context.Context,
-	req EncryptRequest,
+	encryptReq EncryptRequest,
 ) (*EncryptResponse, error) {
-	payload, err := json.Marshal(req)
+	payload, err := json.Marshal(encryptReq)
 	if err != nil {
 		return nil, fmt.Errorf("marshal encrypt request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(http.NewRequestWithContext(
+	httpReq, httpErr := http.NewRequestWithContext(
 		ctx, http.MethodPost, c.baseURL+"/api/v1/crypto/encrypt", bytes.NewReader(payload),
-	))
+	)
+	if httpErr != nil {
+		return nil, fmt.Errorf("create encrypt request: %w", httpErr)
+	}
+	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("crypto-bff encrypt: %w", err)
 	}
@@ -70,10 +74,46 @@ func (c *CryptoBFFClient) EncryptFields(
 	}
 
 	var result EncryptResponse
-	if err := json.Unmarshal(resp.Body, &result); err != nil {
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read encrypt response: %w", err)
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("parse encrypt response: %w", err)
 	}
 	return &result, nil
+}
+
+// Handshake proxies the ECDH crypto-session handshake to the crypto-bff.
+func (c *CryptoBFFClient) Handshake(
+	ctx context.Context,
+	body []byte,
+	authHeader string,
+) (int, []byte, error) {
+	httpReq, err := http.NewRequestWithContext(
+		ctx, http.MethodPost,
+		c.baseURL+"/api/v1/crypto/handshake",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return 0, nil, fmt.Errorf("create handshake request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Crypto-Version", "sp-fle-v1")
+	httpReq.Header.Set("Crypto-Tenant-Id", "default")
+	if authHeader != "" {
+		httpReq.Header.Set("Authorization", authHeader)
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return 0, nil, fmt.Errorf("crypto-bff handshake: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("read handshake response: %w", err)
+	}
+	return resp.StatusCode, respBody, nil
 }
 
 // CreateSession creates a new crypto session for FLE.
@@ -81,10 +121,14 @@ func (c *CryptoBFFClient) CreateSession(
 	ctx context.Context,
 	tenantID string,
 ) (map[string]any, error) {
-	resp, err := c.httpClient.Do(http.NewRequestWithContext(
+	req, err := http.NewRequestWithContext(
 		ctx, http.MethodPost,
 		c.baseURL+"/api/v1/crypto-sessions", nil,
-	))
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create session request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("crypto-bff create session: %w", err)
 	}
@@ -96,7 +140,11 @@ func (c *CryptoBFFClient) CreateSession(
 	}
 
 	var result map[string]any
-	if err := json.Unmarshal(resp.Body, &result); err != nil {
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read session response: %w", err)
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("parse session response: %w", err)
 	}
 	return result, nil

@@ -16,9 +16,16 @@ func RegisterRoutes(
 	dashboard *activityhandler.DashboardHandler,
 	auth *activityhandler.AuthHandler,
 	health *activityhandler.HealthHandler,
+	cryptoSession *activityhandler.CryptoSessionHandler,
+	audit *activityhandler.AuditHandler,
 ) {
 	// Health
 	r.GET("/health", health.Check)
+	r.GET("/health/live", health.Liveness)
+	r.GET("/health/ready", health.Readiness)
+
+	// Crypto session handshake (proxied to crypto-bff)
+	r.POST("/api/v1/collections/crypto-session", cryptoSession.Handshake)
 
 	// Auth routes
 	r.GET("/api/v1/auth/login", auth.Login)
@@ -32,6 +39,7 @@ func RegisterRoutes(
 	r.POST("/api/v1/collections/activities", activities.CreateActivity)
 	r.POST("/api/v1/collections/activities/batch", activities.CreateActivityBatch)
 	r.GET("/api/v1/collections/loans/:loanId/activities", activities.ListActivities)
+	r.POST("/api/v1/collections/loans/:loanId/activities", activities.CreateLoanActivity)
 
 	// Escalations routes
 	r.POST("/api/v1/collections/escalations", escalations.CreateEscalation)
@@ -63,4 +71,12 @@ func RegisterRoutes(
 	r.GET("/api/v1/notifications/:id", notifications.GetDetail)
 	r.POST("/api/v1/notifications/read-all", notifications.MarkAllRead)
 	r.POST("/api/v1/notifications/:id/read", notifications.MarkRead)
+
+	// M2M (machine-to-machine)
+	r.GET("/api/m2m/whoami", activityhandler.M2MWhoami)
+
+	// Audit routes
+	r.GET("/api/v1/audit/recent", audit.Recent)
+	r.GET("/api/v1/audit/events", audit.ByEntity)
+	r.GET("/api/v1/audit/integrity", audit.Integrity)
 }

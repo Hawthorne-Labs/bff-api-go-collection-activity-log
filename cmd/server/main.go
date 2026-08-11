@@ -14,18 +14,29 @@ import (
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/config"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/coreclient"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/cryptobffclient"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/fieldcrypto"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api"
 	activityhandler "github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/handler"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/middleware"
 
-	"github.com/Hawthorne-Labs/shared-observability-go/otel"
+	sharedobservability "github.com/Hawthorne-Labs/shared-observability-go"
 )
 
 func main() {
 	cfg := config.Load()
 
 	// Initialize OpenTelemetry
-	otel.Init(cfg.OTELServiceName, cfg.LogLevel)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	shutdown, err := sharedobservability.Init(ctx, cfg.OTELServiceName)
+	if err != nil {
+		log.Fatalf("telemetry init failed: %v", err)
+	}
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			log.Printf("telemetry shutdown error: %v", err)
+		}
+	}()
 
 	// Initialize infrastructure clients
 	coreClient := coreclient.NewCoreClient(cfg)
@@ -48,6 +59,10 @@ func main() {
 	dashboardHandler := activityhandler.NewDashboardHandler(dashboardUC)
 	authHandler := activityhandler.NewAuthHandler()
 	healthHandler := activityhandler.NewHealthHandler()
+	cryptoSessionStore := fieldcrypto.NewSessionStore(cfg.CryptoSessionTTL)
+	cryptoSessionMgr := fieldcrypto.NewSessionManager(cryptoSessionStore, cfg.CryptoSessionSecret, cfg.CryptoSessionIssuer, cfg.CryptoSessionTTL)
+	cryptoSessionHandler := activityhandler.NewCryptoSessionHandler(cryptoSessionMgr)
+	auditHandler := activityhandler.NewAuditHandler(coreClient)
 
 	// Set Gin mode
 	gin.SetMode(getEnvOrDefault("GIN_MODE", "release"))
@@ -73,6 +88,8 @@ func main() {
 		dashboardHandler,
 		authHandler,
 		healthHandler,
+		cryptoSessionHandler,
+		auditHandler,
 	)
 
 	// Build server
@@ -98,9 +115,9 @@ func main() {
 	<-quit
 
 	log.Println("shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
 	log.Println("server stopped")
