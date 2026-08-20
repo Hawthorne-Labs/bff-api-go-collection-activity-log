@@ -106,12 +106,18 @@ func main() {
 	}
 	var tenantAuthority fieldcrypto.TenantAuthority
 	if fieldcrypto.SessionModeFromEnv() == "stateless" {
-		tenantAuthority, err = fieldcrypto.BuildTenantAuthorityFromEnv(nil)
-		if err != nil {
-			log.Printf("tenant authority unavailable: %v", err)
+		mgmtClient, mgmtErr := fieldcrypto.ManagementTenantClientFromEnv(coreclient.NewMtlsHTTPClient(5 * time.Second))
+		if mgmtErr != nil {
+			log.Printf("tenant authority unavailable: %v", mgmtErr)
 			tenantAuthority = fieldcrypto.FailClosedTenantAuthority{}
 		} else {
-			fieldcrypto.SetTenantAuthority(tenantAuthority)
+			tenantAuthority, err = fieldcrypto.BuildTenantAuthorityFromEnv(mgmtClient)
+			if err != nil {
+				log.Printf("tenant authority unavailable: %v", err)
+				tenantAuthority = fieldcrypto.FailClosedTenantAuthority{}
+			} else {
+				fieldcrypto.SetTenantAuthority(tenantAuthority)
+			}
 		}
 	}
 	cryptoSessionHandler := activityhandler.NewCryptoSessionHandler(cryptoSessionMgr, tenantAuthority)

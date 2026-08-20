@@ -24,8 +24,6 @@ func isPublicPath(path string) bool {
 		return true
 	case strings.HasPrefix(path, "/api/v1/auth/"):
 		return true
-	case path == "/api/v1/collections/crypto-session":
-		return true
 	case strings.HasPrefix(path, "/api/m2m/"):
 		return true
 	default:

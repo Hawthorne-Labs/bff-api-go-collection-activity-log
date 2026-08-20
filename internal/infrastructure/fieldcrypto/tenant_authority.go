@@ -77,21 +77,24 @@ type ManagementTenantClient struct {
 }
 
 // NewManagementTenantClient creates a management tenant client.
-func NewManagementTenantClient(baseURL, secret, issuer, kid, audience string, timeout time.Duration) *ManagementTenantClient {
+func NewManagementTenantClient(baseURL, secret, issuer, kid, audience string, timeout time.Duration, httpClient *http.Client) *ManagementTenantClient {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: timeout}
+	}
 	return &ManagementTenantClient{
-		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		signer:  security.NewInternalJWTSigner(secret, issuer, kid, timeout),
-		audience: audience,
-		subject: "bff-api",
-		httpClient: &http.Client{Timeout: timeout},
+		baseURL:    strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		signer:     security.NewInternalJWTSigner(secret, issuer, kid, timeout),
+		audience:   audience,
+		subject:    "bff-api",
+		httpClient: httpClient,
 	}
 }
 
 // ManagementTenantClientFromEnv builds client from env.
-func ManagementTenantClientFromEnv() (*ManagementTenantClient, error) {
+func ManagementTenantClientFromEnv(httpClient *http.Client) (*ManagementTenantClient, error) {
 	baseURL := strings.TrimSpace(os.Getenv("MANAGEMENT_CORE_API_BASE_URL"))
 	if baseURL == "" {
 		baseURL = strings.TrimSpace(os.Getenv("IDENTITY_CORE_API_BASE_URL"))
@@ -115,7 +118,7 @@ func ManagementTenantClientFromEnv() (*ManagementTenantClient, error) {
 			timeout = time.Duration(f * float64(time.Second))
 		}
 	}
-	return NewManagementTenantClient(baseURL, secret, issuer, kid, audience, timeout), nil
+	return NewManagementTenantClient(baseURL, secret, issuer, kid, audience, timeout, httpClient), nil
 }
 
 func parseFloat(v string) (float64, error) {
@@ -313,7 +316,7 @@ func BuildTenantAuthorityFromEnv(client *ManagementTenantClient) (TenantAuthorit
 	}
 	if client == nil {
 		var err error
-		client, err = ManagementTenantClientFromEnv()
+		client, err = ManagementTenantClientFromEnv(nil)
 		if err != nil {
 			return nil, err
 		}

@@ -79,13 +79,19 @@ func loadMtlsTransport() *http.Transport {
 	return transport
 }
 
-func NewCoreClient(cfg *config.Config) *CoreClient {
-	transport := loadMtlsTransport()
-
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   time.Duration(cfg.RequestTimeoutSeconds) * time.Second,
+// NewMtlsHTTPClient returns an HTTP client using the task mTLS bundle when present.
+func NewMtlsHTTPClient(timeout time.Duration) *http.Client {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
 	}
+	return &http.Client{
+		Transport: loadMtlsTransport(),
+		Timeout:   timeout,
+	}
+}
+
+func NewCoreClient(cfg *config.Config) *CoreClient {
+	client := NewMtlsHTTPClient(time.Duration(cfg.RequestTimeoutSeconds) * time.Second)
 
 	secret := cfg.InternalJWTSecret
 	issuer := cfg.InternalJWTIssuer

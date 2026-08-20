@@ -30,6 +30,11 @@ type handshakeRequest struct {
 
 // Handshake handles POST /api/v1/collections/crypto-session
 func (h *CryptoSessionHandler) Handshake(c *gin.Context) {
+	cc, ok := middleware.RequireScope(c, "collections:read")
+	if !ok {
+		return
+	}
+
 	var req handshakeRequest
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil || req.ClientPublicKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": 90100, "message": "Solicitud de cifrado inválida."}})
@@ -39,15 +44,13 @@ func (h *CryptoSessionHandler) Handshake(c *gin.Context) {
 	sub := "user"
 	scope := "collections:read"
 	email := ""
-	if cc := middleware.GetCognitoContext(c); cc != nil {
-		if cc.Sub != "" {
-			sub = cc.Sub
-		}
-		if cc.Scope != "" {
-			scope = cc.Scope
-		}
-		email = cc.Email
+	if cc.Sub != "" {
+		sub = cc.Sub
 	}
+	if cc.Scope != "" {
+		scope = cc.Scope
+	}
+	email = cc.Email
 
 	switch mgr := h.mgr.(type) {
 	case *fieldcrypto.StatelessCryptoSessionManager:
