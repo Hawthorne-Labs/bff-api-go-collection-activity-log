@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/application/usecases"
@@ -46,7 +47,16 @@ func (h *ActivitiesHandler) ListActivities(c *gin.Context) {
 	agentName := c.Query("agent_name")
 	activityType := c.Query("activity_type")
 
-	result, err := h.activities.ListActivities(c.Request.Context(), loanID, clientID, agentID, agentName, activityType, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
+	var loanIDs []string
+	if raw := c.Query("loan_ids"); raw != "" {
+		for _, id := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(id); trimmed != "" {
+				loanIDs = append(loanIDs, trimmed)
+			}
+		}
+	}
+
+	result, err := h.activities.ListActivities(c.Request.Context(), loanID, loanIDs, clientID, agentID, agentName, activityType, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
 		if bizErr, ok := err.(*domain.BusinessError); ok {
 			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})

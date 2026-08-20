@@ -49,6 +49,7 @@ func main() {
 	agentPerformanceUC := usecases.NewAgentPerformanceUsecase(coreClient, cryptoClient)
 	notificationsUC := usecases.NewNotificationsUsecase(coreClient, cryptoClient)
 	dashboardUC := usecases.NewDashboardUsecase(coreClient, cryptoClient)
+	contactsUC := usecases.NewContactsUsecase(coreClient, cryptoClient)
 
 	// Initialize handlers
 	activitiesHandler := activityhandler.NewActivitiesHandler(activitiesUC)
@@ -63,6 +64,7 @@ func main() {
 	cryptoSessionMgr := fieldcrypto.NewSessionManager(cryptoSessionStore, cfg.CryptoSessionSecret, cfg.CryptoSessionIssuer, cfg.CryptoSessionTTL)
 	cryptoSessionHandler := activityhandler.NewCryptoSessionHandler(cryptoSessionMgr)
 	auditHandler := activityhandler.NewAuditHandler(coreClient)
+	contactsHandler := activityhandler.NewContactsHandler(contactsUC)
 
 	// Set Gin mode
 	gin.SetMode(getEnvOrDefault("GIN_MODE", "release"))
@@ -90,6 +92,7 @@ func main() {
 		healthHandler,
 		cryptoSessionHandler,
 		auditHandler,
+		contactsHandler,
 	)
 
 	// Build server

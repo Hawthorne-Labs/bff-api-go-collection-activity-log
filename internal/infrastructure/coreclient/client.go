@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/config"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/security"
 )
 
 // CoreClient is an HTTP client for the collections-operations core.
@@ -23,47 +23,11 @@ import (
 type CoreClient struct {
 	baseURL    string
 	httpClient *http.Client
-	jwtSigner  *JWTSigner
+	jwtSigner  *security.InternalJWTSigner
+	audience   string
+	subject    string
 }
 
-// JWTSigner mints internal JWTs for BFF→Core auth.
-type JWTSigner struct {
-	issuer   string
-	audience string
-	secret   string
-	ttl      time.Duration
-}
-
-// NewJWTSigner creates a JWT signer using HS256 with the given secret.
-func NewJWTSigner(issuer, audience, secret string) *JWTSigner {
-	return &JWTSigner{
-		issuer:   issuer,
-		audience: audience,
-		secret:   secret,
-		ttl:      5 * time.Minute,
-	}
-}
-
-// Mint creates a new internal JWT token.
-func (s *JWTSigner) Mint(ctx context.Context) (string, error) {
-	iat := time.Now().Unix()
-	exp := iat + int64(s.ttl.Seconds())
-	payload := map[string]any{
-		"iss": s.issuer,
-		"aud": s.audience,
-		"iat": iat,
-		"exp": exp,
-		"sub": "bff-api",
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	token := fmt.Sprintf("INTERNAL.%s", base64.URLEncoding.EncodeToString(data))
-	return token, nil
-}
-
-// NewCoreClient creates a new CoreClient with the given config.
 // mtlsBundle is the JSON structure from MTLS_BUNDLE_JSON secret.
 type mtlsBundle struct {
 	CertificatePEM string `json:"certificate_pem"`
@@ -122,41 +86,37 @@ func NewCoreClient(cfg *config.Config) *CoreClient {
 		Timeout:   time.Duration(cfg.RequestTimeoutSeconds) * time.Second,
 	}
 
-	// JWT signer uses CORE_JWT_SECRET env var or default
-	secret := os.Getenv("CORE_JWT_SECRET")
-	if secret == "" {
-		secret = "dev-secret-change-in-production"
-	}
-	signer := NewJWTSigner("bff-api", "core-operations", secret)
+	secret := cfg.InternalJWTSecret
+	issuer := cfg.InternalJWTIssuer
+	audience := cfg.InternalJWTCoreAudience
+	signer := security.NewInternalJWTSigner(secret, issuer, cfg.InternalJWTActiveKID, 5*time.Minute)
 
 	return &CoreClient{
 		baseURL:    cfg.CoreBaseURL,
 		httpClient: client,
 		jwtSigner:  signer,
+		audience:   audience,
+		subject:    "bff-api",
 	}
 }
 
-// GetToken mints a new internal JWT.
-func (c *CoreClient) GetToken(ctx context.Context) (string, error) {
-	return c.jwtSigner.Mint(ctx)
+// GetToken mints a new internal JWT without actor scope.
+func (c *CoreClient) GetToken(_ context.Context) (string, error) {
+	return c.jwtSigner.Mint(c.audience, c.subject, "")
 }
 
 // authHeaders returns the standard Authorization + tracing headers for core requests.
-func (c *CoreClient) authHeaders(ctx context.Context, traceID, tenantID, userEmail string) (map[string]string, error) {
-	token, err := c.jwtSigner.Mint(ctx)
+func (c *CoreClient) authHeaders(_ context.Context, traceID, tenantID, userEmail string) (map[string]string, error) {
+	token, err := c.jwtSigner.Mint(c.audience, c.subject, userEmail)
 	if err != nil {
 		return nil, err
 	}
 
-	headers := map[string]string{
+	return map[string]string{
 		"Authorization": "Bearer " + token,
 		"X-Trace-Id":    traceID,
 		"X-Tenant-Id":   tenantID,
-	}
-	if userEmail != "" {
-		headers["X-User-Email"] = userEmail
-	}
-	return headers, nil
+	}, nil
 }
 
 // get performs an HTTP GET to the core and returns the parsed JSON response.
@@ -218,7 +178,7 @@ func (c *CoreClient) ForwardGet(ctx context.Context, path string, params map[str
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	token, _ := c.jwtSigner.Mint(ctx)
+	token, _ := c.jwtSigner.Mint(c.audience, c.subject, "")
 	req.Header.Set("Authorization", "Bearer "+token)
 	if traceID != "" {
 		req.Header.Set("X-Trace-Id", traceID)
@@ -317,6 +277,70 @@ func (c *CoreClient) patch(ctx context.Context, path string, headers map[string]
 	return result, nil
 }
 
+// put performs an HTTP PUT to the core and returns the parsed JSON response.
+func (c *CoreClient) put(ctx context.Context, path string, headers map[string]string, body any) (map[string]any, error) {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+path, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("core PUT %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, translateCoreError(resp.StatusCode, respBody)
+	}
+
+	var result map[string]any
+	if len(respBody) == 0 {
+		return result, nil
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+	return result, nil
+}
+
+// deleteNoContent performs an HTTP DELETE that expects 204 No Content.
+func (c *CoreClient) deleteNoContent(ctx context.Context, path string, headers map[string]string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("core DELETE %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return translateCoreError(resp.StatusCode, respBody)
+	}
+	return nil
+}
+
 // postNoContent performs an HTTP POST that expects 204 No Content.
 func (c *CoreClient) postNoContent(ctx context.Context, path string, headers map[string]string, body any) error {
 	payload, err := json.Marshal(body)
@@ -350,8 +374,8 @@ func (c *CoreClient) postNoContent(ctx context.Context, path string, headers map
 // Public API methods — mirror the Python CoreClient
 // ------------------------------------------------------------------
 
-// ListActivities lists activities with filtering by trace_id, tenant_id, loan_id, client_id, agent_id, activity_type, etc.
-func (c *CoreClient) ListActivities(ctx context.Context, traceID, tenantID, loanID, clientID, agentID, agentName, activityType, userEmail string, limit, offset int) (map[string]any, error) {
+// ListActivities lists activities with filtering by trace_id, tenant_id, loan_id, loan_ids, client_id, agent_id, activity_type, etc.
+func (c *CoreClient) ListActivities(ctx context.Context, traceID, tenantID, loanID string, loanIDs []string, clientID, agentID, agentName, activityType, userEmail string, limit, offset int) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
@@ -362,6 +386,9 @@ func (c *CoreClient) ListActivities(ctx context.Context, traceID, tenantID, loan
 	}
 	if loanID != "" {
 		params["loan_id"] = loanID
+	}
+	if len(loanIDs) > 0 {
+		params["loan_ids"] = strings.Join(loanIDs, ",")
 	}
 	if clientID != "" {
 		params["client_id"] = clientID
@@ -375,7 +402,7 @@ func (c *CoreClient) ListActivities(ctx context.Context, traceID, tenantID, loan
 	if activityType != "" {
 		params["activity_type"] = activityType
 	}
-	return c.get(ctx, "/internal/v1/collections/activities", headers, params)
+	return c.get(ctx, "/internal/v1/activities", headers, params)
 }
 
 // CreateActivity creates a single activity with idempotency support.
@@ -396,7 +423,7 @@ func (c *CoreClient) CreateActivity(ctx context.Context, payload map[string]any,
 	if idempotencyKey != "" {
 		headers["Idempotency-Key"] = idempotencyKey
 	}
-	return c.post(ctx, "/internal/v1/collections/activities", headers, payload)
+	return c.post(ctx, "/internal/v1/activities", headers, payload)
 }
 
 // CreateActivityBatch creates activities in batch.
@@ -417,7 +444,7 @@ func (c *CoreClient) CreateActivityBatch(ctx context.Context, payload map[string
 	if idempotencyKey != "" {
 		headers["Idempotency-Key"] = idempotencyKey
 	}
-	return c.post(ctx, "/internal/v1/collections/activities/batch", headers, payload)
+	return c.post(ctx, "/internal/v1/activities/batch", headers, payload)
 }
 
 // CreateEscalation creates an escalation record.
@@ -438,7 +465,7 @@ func (c *CoreClient) CreateEscalation(ctx context.Context, payload map[string]an
 	if idempotencyKey != "" {
 		headers["Idempotency-Key"] = idempotencyKey
 	}
-	return c.post(ctx, "/internal/v1/collections/escalations", headers, payload)
+	return c.post(ctx, "/api/v1/collections/escalations", headers, payload)
 }
 
 // UpdateEscalationStatus updates the status of an escalation.
@@ -447,7 +474,7 @@ func (c *CoreClient) UpdateEscalationStatus(ctx context.Context, escalationID st
 	if err != nil {
 		return nil, err
 	}
-	return c.patch(ctx, "/internal/v1/collections/escalations/"+escalationID+"/status", headers, payload)
+	return c.patch(ctx, "/api/v1/collections/escalations/"+escalationID+"/status", headers, payload)
 }
 
 // DecideEscalation records a decision on an escalation.
@@ -456,7 +483,7 @@ func (c *CoreClient) DecideEscalation(ctx context.Context, escalationID string, 
 	if err != nil {
 		return nil, err
 	}
-	return c.post(ctx, "/internal/v1/collections/escalations/"+escalationID+"/decisions", headers, payload)
+	return c.post(ctx, "/api/v1/collections/escalations/"+escalationID+"/decisions", headers, payload)
 }
 
 // ListEscalations lists escalations (uses activity_type=escalation filter internally).
@@ -485,7 +512,7 @@ func (c *CoreClient) ListEscalations(ctx context.Context, traceID, tenantID, loa
 	if status != "" {
 		params["status"] = status
 	}
-	return c.get(ctx, "/internal/v1/collections/escalations", headers, params)
+	return c.get(ctx, "/internal/v1/activities", headers, params)
 }
 
 // GetAgentKPIs gets agent KPIs for a given day.
@@ -495,13 +522,10 @@ func (c *CoreClient) GetAgentKPIs(ctx context.Context, agentID, traceID, tenantI
 		return nil, err
 	}
 	params := map[string]string{}
-	if agentID != "" {
-		params["agent_id"] = agentID
-	}
 	if day != "" {
 		params["day"] = day
 	}
-	return c.get(ctx, "/internal/v1/collections/agent-performance/kpis", headers, params)
+	return c.get(ctx, "/internal/v1/kpis/agents/"+agentID, headers, params)
 }
 
 // GetAgentGoals gets agent goals.
@@ -510,11 +534,7 @@ func (c *CoreClient) GetAgentGoals(ctx context.Context, agentID, traceID, tenant
 	if err != nil {
 		return nil, err
 	}
-	params := map[string]string{}
-	if agentID != "" {
-		params["agent_id"] = agentID
-	}
-	return c.get(ctx, "/internal/v1/collections/agent-performance/goals", headers, params)
+	return c.get(ctx, "/internal/v1/kpis/agents/"+agentID+"/goals", headers, nil)
 }
 
 // GetRanking gets the agent performance ranking.
@@ -529,7 +549,7 @@ func (c *CoreClient) GetRanking(ctx context.Context, traceID, tenantID, day stri
 	if day != "" {
 		params["day"] = day
 	}
-	return c.get(ctx, "/internal/v1/collections/agent-performance/ranking", headers, params)
+	return c.get(ctx, "/internal/v1/kpis/ranking", headers, params)
 }
 
 // GetWorkload gets agent workload.
@@ -538,7 +558,7 @@ func (c *CoreClient) GetWorkload(ctx context.Context, traceID, tenantID, userEma
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/collections/agent-performance/workload", headers, nil)
+	return c.get(ctx, "/internal/v1/kpis/workload", headers, nil)
 }
 
 // GetTeamPerformanceReport gets the team performance report.
@@ -547,7 +567,7 @@ func (c *CoreClient) GetTeamPerformanceReport(ctx context.Context, traceID, tena
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/collections/agent-performance/report", headers, nil)
+	return c.get(ctx, "/internal/v1/kpis/team-performance-report", headers, nil)
 }
 
 // GetScopedGoals gets scoped goals for the current user/team.
@@ -556,7 +576,7 @@ func (c *CoreClient) GetScopedGoals(ctx context.Context, traceID, tenantID, user
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/collections/agent-performance/goals/scoped", headers, nil)
+	return c.get(ctx, "/internal/v1/kpis/goals", headers, nil)
 }
 
 // ListNotifications lists notifications with cursor pagination and filters.
@@ -598,7 +618,7 @@ func (c *CoreClient) NotificationEventsAfter(ctx context.Context, traceID, tenan
 	if afterEventID != "" {
 		params["after_event_id"] = afterEventID
 	}
-	return c.get(ctx, "/internal/v1/notifications/stream", headers, params)
+	return c.get(ctx, "/internal/v1/notifications/events", headers, params)
 }
 
 // NotificationUnreadCount gets the unread notification count.
@@ -616,7 +636,7 @@ func (c *CoreClient) RegisterNotificationDevice(ctx context.Context, payload map
 	if err != nil {
 		return nil, err
 	}
-	return c.post(ctx, "/internal/v1/notifications/devices/current", headers, payload)
+	return c.put(ctx, "/internal/v1/notifications/devices/current", headers, payload)
 }
 
 // RevokeNotificationDevice revokes a notification device.
@@ -625,9 +645,8 @@ func (c *CoreClient) RevokeNotificationDevice(ctx context.Context, installationI
 	if err != nil {
 		return err
 	}
-	return c.postNoContent(ctx, "/internal/v1/notifications/devices/current", headers, map[string]any{
-		"installation_id": installationID,
-	})
+	_ = installationID
+	return c.deleteNoContent(ctx, "/internal/v1/notifications/devices/current", headers)
 }
 
 // NotificationDetail gets a single notification detail.
@@ -655,4 +674,22 @@ func (c *CoreClient) MarkNotificationRead(ctx context.Context, notificationID, t
 		return err
 	}
 	return c.postNoContent(ctx, "/internal/v1/notifications/"+notificationID+"/read", headers, nil)
+}
+
+// SubmitContact submits a contact form to the core.
+func (c *CoreClient) SubmitContact(ctx context.Context, payload map[string]any, traceID, tenantID, requestID, correlationID, traceparent string) (map[string]any, error) {
+	headers, err := c.authHeaders(ctx, traceID, tenantID, "")
+	if err != nil {
+		return nil, err
+	}
+	if requestID != "" {
+		headers["X-Request-Id"] = requestID
+	}
+	if correlationID != "" {
+		headers["X-Correlation-Id"] = correlationID
+	}
+	if traceparent != "" {
+		headers["traceparent"] = traceparent
+	}
+	return c.post(ctx, "/internal/v1/contacts", headers, payload)
 }

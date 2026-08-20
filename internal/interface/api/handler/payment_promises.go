@@ -43,8 +43,9 @@ func (h *PaymentPromisesHandler) ListPaymentPromises(c *gin.Context) {
 	loanID := c.Query("loan_id")
 	clientID := c.Query("client_id")
 	agentID := c.Query("agent_id")
+	agentName := c.Query("agent_name")
 
-	result, err := h.paymentPromises.ListPaymentPromises(c.Request.Context(), loanID, clientID, agentID, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
+	result, err := h.paymentPromises.ListPaymentPromises(c.Request.Context(), loanID, clientID, agentID, agentName, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
 		if bizErr, ok := err.(*domain.BusinessError); ok {
 			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})

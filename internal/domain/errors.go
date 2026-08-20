@@ -32,6 +32,8 @@ const (
 	// Dashboard
 	DashboardSummaryFailed = 5050
 	DashboardAlertsFailed  = 5051
+	// Contacts
+	ContactSubmitFailed = 5080
 	// General
 	CollectionsRequestFailed = 5060
 	// Auth

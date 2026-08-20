@@ -25,17 +25,21 @@ type Config struct {
 	SessionBackend        string
 	LogLevel              string
 	OTELServiceName       string
-	CryptoSessionSecret   string
-	CryptoSessionIssuer   string
-	CryptoSessionTTL      int
+	CryptoSessionSecret      string
+	CryptoSessionIssuer      string
+	CryptoSessionTTL         int
+	InternalJWTSecret        string
+	InternalJWTIssuer        string
+	InternalJWTCoreAudience  string
+	InternalJWTActiveKID     string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() *Config {
 	return &Config{
-		Port:                  getEnvOrDefault("PORT", "8080"),
+		Port:                  getEnvOrDefault("PORT", "8000"),
 		CoreBaseURL:           getEnvOrDefault("CORE_BASE_URL", getEnvOrDefault("API_BASE_URL", "http://localhost:9090")),
-		CryptoBFFBaseURL:      getEnvOrDefault("CRYPTO_BFF_BASE_URL", "http://localhost:8081"),
+		CryptoBFFBaseURL:      getEnvOrDefault("CRYPTO_BFF_BASE_URL", getEnvOrDefault("CRYPTO_BFF_URL", "http://localhost:8081")),
 		CryptoEnabled:         isTrueEnv("CRYPTO_ENABLED"),
 		RequestTimeoutSeconds: getEnvIntOrDefault("REQUEST_TIMEOUT_SECONDS", 30),
 		MaxRequestBodyBytes:   getEnvIntOrDefault("MAX_REQUEST_BODY_BYTES", 65536),
@@ -52,9 +56,13 @@ func Load() *Config {
 		SessionBackend:        getEnvOrDefault("SESSION_BACKEND", "redis"),
 		LogLevel:              getEnvOrDefault("LOG_LEVEL", "info"),
 		OTELServiceName:       getEnvOrDefault("OTEL_SERVICE_NAME", "bff-api-go-collection-activity-log"),
-		CryptoSessionSecret:   getEnvOrDefault("CRYPTO_SESSION_TOKEN_SECRET", getEnvOrDefault("INTERNAL_JWT_SECRET", "dev-internal-jwt-secret-32-bytes-min")),
-		CryptoSessionIssuer:   getEnvOrDefault("CRYPTO_SESSION_ISSUER", "hawthorne-bff"),
-		CryptoSessionTTL:      getEnvIntOrDefault("CRYPTO_SESSION_TTL_SECONDS", 900),
+		CryptoSessionSecret:     getEnvOrDefault("CRYPTO_SESSION_TOKEN_SECRET", getEnvOrDefault("INTERNAL_JWT_SECRET", "dev-internal-jwt-secret-32-bytes-min")),
+		CryptoSessionIssuer:     getEnvOrDefault("CRYPTO_SESSION_ISSUER", "hawthorne-bff"),
+		CryptoSessionTTL:        getEnvIntOrDefault("CRYPTO_SESSION_TTL_SECONDS", 900),
+		InternalJWTSecret:       getEnvOrDefault("INTERNAL_JWT_SECRET", getEnvOrDefault("CORE_JWT_SECRET", "dev-internal-jwt-secret-32-bytes-min")),
+		InternalJWTIssuer:       getEnvOrDefault("INTERNAL_JWT_ISSUER", "python-templates-finch"),
+		InternalJWTCoreAudience: getEnvOrDefault("INTERNAL_JWT_CORE_AUDIENCE", "core-api"),
+		InternalJWTActiveKID:    getEnvOrDefault("INTERNAL_JWT_ACTIVE_KID", ""),
 	}
 }
 

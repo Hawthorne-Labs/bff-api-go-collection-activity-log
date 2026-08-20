@@ -18,6 +18,7 @@ func RegisterRoutes(
 	health *activityhandler.HealthHandler,
 	cryptoSession *activityhandler.CryptoSessionHandler,
 	audit *activityhandler.AuditHandler,
+	contacts *activityhandler.ContactsHandler,
 ) {
 	// Health
 	r.GET("/health", health.Check)
@@ -79,4 +80,7 @@ func RegisterRoutes(
 	r.GET("/api/v1/audit/recent", audit.Recent)
 	r.GET("/api/v1/audit/events", audit.ByEntity)
 	r.GET("/api/v1/audit/integrity", audit.Integrity)
+
+	// Contacts
+	r.POST("/api/v1/contacts", contacts.SubmitContact)
 }

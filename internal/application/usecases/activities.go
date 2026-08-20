@@ -19,8 +19,8 @@ func NewActivitiesUsecase(core *coreclient.CoreClient, crypto *cryptobffclient.C
 }
 
 // ListActivities lists activities with filtering.
-func (u *ActivitiesUsecase) ListActivities(ctx context.Context, loanID, clientID, agentID, agentName, activityType string, limit, offset int, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.ListActivities(ctx, traceID, tenantID, loanID, clientID, agentID, agentName, activityType, userEmail, limit, offset)
+func (u *ActivitiesUsecase) ListActivities(ctx context.Context, loanID string, loanIDs []string, clientID, agentID, agentName, activityType string, limit, offset int, traceID, tenantID, userEmail string) (map[string]any, error) {
+	return u.core.ListActivities(ctx, traceID, tenantID, loanID, loanIDs, clientID, agentID, agentName, activityType, userEmail, limit, offset)
 }
 
 // CreateActivity creates a single activity.

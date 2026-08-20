@@ -33,7 +33,9 @@ func (u *EscalationsUsecase) DecideEscalation(ctx context.Context, escalationID 
 	return u.core.DecideEscalation(ctx, escalationID, payload, traceID, tenantID, userEmail)
 }
 
-// ListEscalations lists escalations with filtering.
+// ListEscalations lists escalations via the activities endpoint with activity_type=escalation filter.
+// This matches the Python BFF behaviour: Core does not expose a standalone GET escalations route,
+// so we delegate to the activities list which already applies visibility scoping.
 func (u *EscalationsUsecase) ListEscalations(ctx context.Context, loanID, clientID, agentID, agentName, status string, limit, offset int, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.ListEscalations(ctx, traceID, tenantID, loanID, clientID, agentID, agentName, status, userEmail, limit, offset)
+	return u.core.ListActivities(ctx, traceID, tenantID, loanID, nil, clientID, agentID, agentName, "escalation", userEmail, limit, offset)
 }
