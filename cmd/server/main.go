@@ -6,15 +6,20 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/application/usecases"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/auth"
+	keycloakauth "github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/auth/keycloak"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/config"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/coreclient"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/cryptobffclient"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/fieldcrypto"
+	redisinfra "github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/redis"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/session"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api"
 	activityhandler "github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/handler"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/middleware"
@@ -24,6 +29,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := config.EnforceProductionSecrets(); err != nil {
+		log.Fatalf("%v", err)
+	}
 
 	// Initialize OpenTelemetry
 	ctx, cancel := context.WithCancel(context.Background())
@@ -37,6 +45,33 @@ func main() {
 			log.Printf("telemetry shutdown error: %v", err)
 		}
 	}()
+
+	emailLookup, err := auth.NewAWSCognitoEmailLookup(ctx, cfg.AWSRegion, cfg.CognitoPoolID)
+	if err != nil {
+		log.Printf("cognito AdminGetUser client unavailable: %v", err)
+	}
+	cognitoValidator := auth.NewCognitoJwtValidator(cfg, emailLookup, auth.NewIdentityEmailCache(cfg.RedisURL))
+	redisClient := redisinfra.NewClient(cfg.RedisURL)
+	var sessionStore *session.Store
+	var flowStateStore *session.FlowStateStore
+	if strings.EqualFold(cfg.SessionBackend, "memory") {
+		sessionStore = session.NewMemoryStore()
+		flowStateStore = session.NewMemoryFlowStateStore()
+	} else {
+		sessionStore = session.NewStore(redisClient)
+		flowStateStore = session.NewFlowStateStore(redisClient)
+	}
+	keycloakPublicURL := cfg.KeycloakPublicURL
+	if keycloakPublicURL == "" {
+		keycloakPublicURL = cfg.KeycloakURL
+	}
+	oidcClient := keycloakauth.NewKeycloakOIDCClient(
+		cfg.KeycloakURL,
+		keycloakPublicURL,
+		cfg.KeycloakRealm,
+		cfg.KeycloakClientID,
+		cfg.KeycloakTimeoutSeconds,
+	)
 
 	// Initialize infrastructure clients
 	coreClient := coreclient.NewCoreClient(cfg)
@@ -56,15 +91,33 @@ func main() {
 	escalationsHandler := activityhandler.NewEscalationsHandler(escalationsUC)
 	paymentPromisesHandler := activityhandler.NewPaymentPromisesHandler(paymentPromisesUC)
 	agentPerformanceHandler := activityhandler.NewAgentPerformanceHandler(agentPerformanceUC)
-	notificationsHandler := activityhandler.NewNotificationsHandler(notificationsUC)
+	notificationsHandler := activityhandler.NewNotificationsHandler(
+		notificationsUC,
+		cfg.NotificationCursorSecret,
+		redisClient,
+		cfg.NotificationStreamMaxSeconds,
+	)
 	dashboardHandler := activityhandler.NewDashboardHandler(dashboardUC)
-	authHandler := activityhandler.NewAuthHandler()
+	authHandler := activityhandler.NewAuthHandler(cfg, oidcClient, sessionStore, flowStateStore)
 	healthHandler := activityhandler.NewHealthHandler()
-	cryptoSessionStore := fieldcrypto.NewSessionStore(cfg.CryptoSessionTTL)
-	cryptoSessionMgr := fieldcrypto.NewSessionManager(cryptoSessionStore, cfg.CryptoSessionSecret, cfg.CryptoSessionIssuer, cfg.CryptoSessionTTL)
-	cryptoSessionHandler := activityhandler.NewCryptoSessionHandler(cryptoSessionMgr)
+	cryptoSessionMgr, err := fieldcrypto.GetSessionManager()
+	if err != nil {
+		log.Printf("crypto session manager unavailable: %v", err)
+	}
+	var tenantAuthority fieldcrypto.TenantAuthority
+	if fieldcrypto.SessionModeFromEnv() == "stateless" {
+		tenantAuthority, err = fieldcrypto.BuildTenantAuthorityFromEnv(nil)
+		if err != nil {
+			log.Printf("tenant authority unavailable: %v", err)
+			tenantAuthority = fieldcrypto.FailClosedTenantAuthority{}
+		} else {
+			fieldcrypto.SetTenantAuthority(tenantAuthority)
+		}
+	}
+	cryptoSessionHandler := activityhandler.NewCryptoSessionHandler(cryptoSessionMgr, tenantAuthority)
+	cryptoProxyHandler := activityhandler.NewCryptoProxyHandler(cryptoClient)
 	auditHandler := activityhandler.NewAuditHandler(coreClient)
-	contactsHandler := activityhandler.NewContactsHandler(contactsUC)
+	contactsHandler := activityhandler.NewContactsHandler(contactsUC, cryptoClient)
 
 	// Set Gin mode
 	gin.SetMode(getEnvOrDefault("GIN_MODE", "release"))
@@ -72,16 +125,51 @@ func main() {
 	// Create Gin engine
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(middleware.RequestContextMiddleware())
+	r.Use(middleware.SecurityHeadersMiddleware())
+	r.Use(middleware.RequestTimeoutMiddleware(cfg.RequestTimeoutSeconds))
+	r.Use(middleware.RequireJSONContentType())
+	r.Use(middleware.RateLimitMiddleware(
+		middleware.NewMemoryRateLimitStore(cfg.RateLimitRequests, cfg.RateLimitWindowSec),
+		cfg.TrustedProxies,
+		cfg.RateLimitSkipPaths,
+	))
+	r.Use(middleware.RequestSizeLimitMiddleware(cfg.MaxRequestBodyBytes))
+	r.Use(middleware.CSRFMiddleware(sessionStore))
 
 	// Middleware pipeline
 	r.Use(middleware.TracingMiddleware())
-	r.Use(middleware.CognitoContextMiddleware())
+	r.Use(middleware.CognitoContextMiddleware(cognitoValidator))
 	r.Use(middleware.AuditMiddleware())
+	if cfg.CryptoEnabled {
+		cryptoSettings := fieldcrypto.CryptoSettingsFromEnv()
+		var fieldCryptoService *fieldcrypto.FieldCryptoService
+		switch mgr := cryptoSessionMgr.(type) {
+		case *fieldcrypto.CryptoSessionManager:
+			fieldCryptoService = fieldcrypto.NewFieldCryptoService(fieldcrypto.NewSessionKeyProvider(mgr))
+		default:
+			if provider, err := fieldcrypto.EnvKeyProviderFromEnv(); err == nil {
+				fieldCryptoService = fieldcrypto.NewFieldCryptoService(provider)
+			} else {
+				placeholder, _ := fieldcrypto.NewEnvKeyProvider(map[string][]byte{"unused": bytesRepeat(32, 1)}, "unused")
+				fieldCryptoService = fieldcrypto.NewFieldCryptoService(placeholder)
+			}
+		}
+		r.Use(middleware.FieldCryptoMiddleware(middleware.FieldCryptoMiddlewareConfig{
+			Enabled:         true,
+			Service:         fieldCryptoService,
+			Policy:          cryptoSettings.Policy(),
+			Settings:        cryptoSettings,
+			SessionManager:  cryptoSessionMgr,
+			TenantAuthority: tenantAuthority,
+		}))
+	}
 	r.Use(middleware.CryptoMiddleware(cfg.CryptoEnabled, middleware.NewCryptoClient(cfg.CryptoBFFBaseURL)))
 	r.Use(middleware.CORS(cfg.CORSSOrigins))
 
 	// Register routes
 	api.RegisterRoutes(r,
+		sessionStore,
 		activitiesHandler,
 		escalationsHandler,
 		paymentPromisesHandler,
@@ -91,6 +179,7 @@ func main() {
 		authHandler,
 		healthHandler,
 		cryptoSessionHandler,
+		cryptoProxyHandler,
 		auditHandler,
 		contactsHandler,
 	)
@@ -124,6 +213,14 @@ func main() {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
 	log.Println("server stopped")
+}
+
+func bytesRepeat(n int, b byte) []byte {
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = b
+	}
+	return out
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

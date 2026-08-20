@@ -23,25 +23,24 @@ func NewActivitiesHandler(activities *usecases.ActivitiesUsecase) *ActivitiesHan
 
 // ListActivities handles GET /api/v1/collections/activities
 func (h *ActivitiesHandler) ListActivities(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
 		return
 	}
+	ctx := middleware.GetCognitoContext(c)
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	if limit < 1 || limit > 500 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	resolvedPage, resolvedPageSize, resolvedOffset := resolveActivityPage(page, pageSize, limit, offset, c.Query("limit") != "")
 
 	loanID := c.Query("loan_id")
+	if loanID == "" {
+		loanID = c.Param("loanId")
+	}
 	clientID := c.Query("client_id")
 	agentID := c.Query("agent_id")
 	agentName := c.Query("agent_name")
@@ -56,7 +55,7 @@ func (h *ActivitiesHandler) ListActivities(c *gin.Context) {
 		}
 	}
 
-	result, err := h.activities.ListActivities(c.Request.Context(), loanID, loanIDs, clientID, agentID, agentName, activityType, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
+	result, err := h.activities.ListActivities(c.Request.Context(), loanID, loanIDs, clientID, agentID, agentName, activityType, resolvedPageSize, resolvedOffset, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
 		if bizErr, ok := err.(*domain.BusinessError); ok {
 			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
@@ -66,7 +65,7 @@ func (h *ActivitiesHandler) ListActivities(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, paginateActivities(result, resolvedPage, resolvedPageSize))
 }
 
 // CreateActivity handles POST /api/v1/collections/activities
@@ -106,11 +105,13 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 
 // CreateLoanActivity handles POST /api/v1/collections/loans/:loanId/activities
 func (h *ActivitiesHandler) CreateLoanActivity(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es valido."}})
+	if _, ok := middleware.RequireScope(c, "collections:write"); !ok {
 		return
 	}
+	if _, ok := middleware.EnforceAllRoles(c); !ok {
+		return
+	}
+	ctx := middleware.GetCognitoContext(c)
 
 	loanID := c.Param("loanId")
 	if loanID == "" {
@@ -133,7 +134,20 @@ func (h *ActivitiesHandler) CreateLoanActivity(c *gin.Context) {
 	traceparent := c.GetHeader("traceparent")
 	idempotencyKey := c.GetHeader("Idempotency-Key")
 
-	result, err := h.activities.CreateActivity(c.Request.Context(), payload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
+	encryptedPayload, err := h.activities.EncryptActivityPII(
+		c.Request.Context(),
+		payload,
+		tenantID.(string),
+		requestID,
+		correlationID,
+		traceparent,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": map[string]any{"code": domain.ActivityCreateFailed, "message": "No se pudo cifrar la gestión."}})
+		return
+	}
+
+	result, err := h.activities.CreateActivity(c.Request.Context(), encryptedPayload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
 	if err != nil {
 		if bizErr, ok := err.(*domain.BusinessError); ok {
 			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
@@ -179,4 +193,56 @@ func (h *ActivitiesHandler) CreateActivityBatch(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, result)
+}
+
+func resolveActivityPage(page, pageSize, limit, offset int, limitProvided bool) (int, int, int) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 500 {
+		pageSize = 20
+	}
+	if !limitProvided {
+		return page, pageSize, (page - 1) * pageSize
+	}
+	if limit < 1 || limit > 500 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return offset/limit + 1, limit, offset
+}
+
+func paginateActivities(response map[string]any, page, pageSize int) map[string]any {
+	if response == nil {
+		response = map[string]any{}
+	}
+	total := 0
+	switch value := response["total"].(type) {
+	case float64:
+		total = int(value)
+	case int:
+		total = value
+	case int64:
+		total = int(value)
+	}
+	totalPages := 0
+	if pageSize > 0 {
+		totalPages = (total + pageSize - 1) / pageSize
+	}
+	items := response["items"]
+	if items == nil {
+		items = []any{}
+	}
+	return map[string]any{
+		"items":        items,
+		"page":         page,
+		"page_size":    pageSize,
+		"total_items":  total,
+		"total_pages":  totalPages,
+		"has_next":     page < totalPages,
+		"has_previous": page > 1,
+		"total":        total,
+	}
 }

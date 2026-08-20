@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -121,16 +122,16 @@ func (c *CoreClient) authHeaders(_ context.Context, traceID, tenantID, userEmail
 
 // get performs an HTTP GET to the core and returns the parsed JSON response.
 func (c *CoreClient) get(ctx context.Context, path string, headers map[string]string, params map[string]string) (map[string]any, error) {
-	url := c.baseURL + path
+	endpoint := c.baseURL + path
 	query := ""
 	if len(params) > 0 {
-		queryParts := make([]string, 0, len(params))
+		values := url.Values{}
 		for k, v := range params {
-			queryParts = append(queryParts, k+"="+v)
+			values.Set(k, v)
 		}
-		query = "?" + strings.Join(queryParts, "&")
+		query = "?" + values.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url+query, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+query, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -580,7 +581,7 @@ func (c *CoreClient) GetScopedGoals(ctx context.Context, traceID, tenantID, user
 }
 
 // ListNotifications lists notifications with cursor pagination and filters.
-func (c *CoreClient) ListNotifications(ctx context.Context, traceID, tenantID, userEmail, state, severity, fromDate, toDate string, limit int, beforeID string) (map[string]any, error) {
+func (c *CoreClient) ListNotifications(ctx context.Context, traceID, tenantID, userEmail, state, severity, fromDate, toDate string, limit int, beforeAt, beforeID string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
@@ -595,12 +596,13 @@ func (c *CoreClient) ListNotifications(ctx context.Context, traceID, tenantID, u
 		params["severity"] = severity
 	}
 	if fromDate != "" {
-		params["from_date"] = fromDate
+		params["from"] = fromDate
 	}
 	if toDate != "" {
-		params["to_date"] = toDate
+		params["to"] = toDate
 	}
-	if beforeID != "" {
+	if beforeAt != "" && beforeID != "" {
+		params["before_at"] = beforeAt
 		params["before_id"] = beforeID
 	}
 	return c.get(ctx, "/internal/v1/notifications", headers, params)
@@ -616,7 +618,9 @@ func (c *CoreClient) NotificationEventsAfter(ctx context.Context, traceID, tenan
 		"limit": fmt.Sprintf("%d", limit),
 	}
 	if afterEventID != "" {
-		params["after_event_id"] = afterEventID
+		params["after"] = afterEventID
+	} else {
+		params["after"] = "0"
 	}
 	return c.get(ctx, "/internal/v1/notifications/events", headers, params)
 }
@@ -645,8 +649,11 @@ func (c *CoreClient) RevokeNotificationDevice(ctx context.Context, installationI
 	if err != nil {
 		return err
 	}
-	_ = installationID
-	return c.deleteNoContent(ctx, "/internal/v1/notifications/devices/current", headers)
+	path := "/internal/v1/notifications/devices/current"
+	if installationID != "" {
+		path += "?installation_id=" + url.QueryEscape(installationID)
+	}
+	return c.deleteNoContent(ctx, path, headers)
 }
 
 // NotificationDetail gets a single notification detail.
@@ -659,12 +666,12 @@ func (c *CoreClient) NotificationDetail(ctx context.Context, notificationID, tra
 }
 
 // MarkAllNotificationsRead marks all notifications as read.
-func (c *CoreClient) MarkAllNotificationsRead(ctx context.Context, traceID, tenantID, userEmail string) error {
+func (c *CoreClient) MarkAllNotificationsRead(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.postNoContent(ctx, "/internal/v1/notifications/read-all", headers, nil)
+	return c.post(ctx, "/internal/v1/notifications/read-all", headers, map[string]any{})
 }
 
 // MarkNotificationRead marks a single notification as read.

@@ -5,18 +5,23 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/fieldcrypto"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/middleware"
 )
 
-// CryptoSessionHandler handles the local P-256 ECDH crypto-session handshake.
+// CryptoSessionHandler handles the P-256 ECDH crypto-session handshake.
 type CryptoSessionHandler struct {
-	mgr *fieldcrypto.SessionManager
+	mgr             any
+	tenantAuthority fieldcrypto.TenantAuthority
 }
 
 // NewCryptoSessionHandler creates a new handler.
-func NewCryptoSessionHandler(mgr *fieldcrypto.SessionManager) *CryptoSessionHandler {
-	return &CryptoSessionHandler{mgr: mgr}
+func NewCryptoSessionHandler(mgr any, tenantAuthority fieldcrypto.TenantAuthority) *CryptoSessionHandler {
+	if tenantAuthority == nil {
+		tenantAuthority = fieldcrypto.GetTenantAuthority()
+	}
+	return &CryptoSessionHandler{mgr: mgr, tenantAuthority: tenantAuthority}
 }
 
 type handshakeRequest struct {
@@ -33,6 +38,7 @@ func (h *CryptoSessionHandler) Handshake(c *gin.Context) {
 
 	sub := "user"
 	scope := "collections:read"
+	email := ""
 	if cc := middleware.GetCognitoContext(c); cc != nil {
 		if cc.Sub != "" {
 			sub = cc.Sub
@@ -40,13 +46,48 @@ func (h *CryptoSessionHandler) Handshake(c *gin.Context) {
 		if cc.Scope != "" {
 			scope = cc.Scope
 		}
+		email = cc.Email
 	}
 
-	result, err := h.mgr.Handshake(req.ClientPublicKey, sub, scope)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": 90101, "message": "Material de cifrado inválido."}})
-		return
+	switch mgr := h.mgr.(type) {
+	case *fieldcrypto.StatelessCryptoSessionManager:
+		authorization := c.GetHeader("Authorization")
+		if authorization == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": 90109, "message": fieldcrypto.CatalogErrorMessage(90109)}})
+			return
+		}
+		authorized, err := h.tenantAuthority.Resolve(
+			c.Request.Context(),
+			authorization,
+			c.GetHeader("X-Tenant-Id"),
+			email,
+			true,
+			c.GetHeader("X-Trace-Id"),
+		)
+		if err != nil {
+			status, body := fieldcrypto.PublicErrorEnvelope(err)
+			c.JSON(status, body)
+			return
+		}
+		accessTokenHash, err := fieldcrypto.HashAccessToken(authorization)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": 90109, "message": fieldcrypto.CatalogErrorMessage(90109)}})
+			return
+		}
+		result, err := mgr.Handshake(req.ClientPublicKey, sub, scope, authorized.TenantDigest, accessTokenHash)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": 90101, "message": fieldcrypto.CatalogErrorMessage(90101)}})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case *fieldcrypto.CryptoSessionManager:
+		result, err := mgr.Handshake(req.ClientPublicKey, sub, scope)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": 90101, "message": fieldcrypto.CatalogErrorMessage(90101)}})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": map[string]any{"code": 90012, "message": "Error interno."}})
 	}
-
-	c.JSON(http.StatusOK, result)
 }

@@ -22,16 +22,18 @@ func NewAgentPerformanceHandler(agentPerformance *usecases.AgentPerformanceUseca
 
 // GetKPIs handles GET /api/v1/collections/agent-performance/kpis
 func (h *AgentPerformanceHandler) GetKPIs(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceAllRoles(c)
+	if !ok {
 		return
 	}
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
 
-	agentID := c.Query("agent_id")
+	agentID := middleware.ResolveAgentID(ctx, c.Query("agent_id"))
 	day := c.Query("day")
 
 	result, err := h.agentPerformance.GetKPIs(c.Request.Context(), agentID, day, traceID.(string), tenantID.(string))
@@ -49,16 +51,18 @@ func (h *AgentPerformanceHandler) GetKPIs(c *gin.Context) {
 
 // GetGoals handles GET /api/v1/collections/agent-performance/goals
 func (h *AgentPerformanceHandler) GetGoals(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceAllRoles(c)
+	if !ok {
 		return
 	}
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
 
-	agentID := c.Query("agent_id")
+	agentID := middleware.ResolveAgentID(ctx, c.Query("agent_id"))
 
 	result, err := h.agentPerformance.GetGoals(c.Request.Context(), agentID, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
@@ -75,20 +79,22 @@ func (h *AgentPerformanceHandler) GetGoals(c *gin.Context) {
 
 // GetRanking handles GET /api/v1/collections/agent-performance/ranking
 func (h *AgentPerformanceHandler) GetRanking(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
 		return
 	}
+	if _, ok := middleware.EnforceSupervisorRoles(c); !ok {
+		return
+	}
+	ctx := middleware.GetCognitoContext(c)
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	day := c.Query("day")
 
-	if limit < 1 || limit > 500 {
-		limit = 20
+	if limit < 1 || limit > 100 {
+		limit = 10
 	}
 
 	result, err := h.agentPerformance.GetRanking(c.Request.Context(), day, limit, traceID.(string), tenantID.(string), ctx.Email)
@@ -106,9 +112,11 @@ func (h *AgentPerformanceHandler) GetRanking(c *gin.Context) {
 
 // GetWorkload handles GET /api/v1/collections/agent-performance/workload
 func (h *AgentPerformanceHandler) GetWorkload(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceSupervisorRoles(c)
+	if !ok {
 		return
 	}
 
@@ -130,9 +138,11 @@ func (h *AgentPerformanceHandler) GetWorkload(c *gin.Context) {
 
 // GetReport handles GET /api/v1/collections/agent-performance/report
 func (h *AgentPerformanceHandler) GetReport(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceSupervisorRoles(c)
+	if !ok {
 		return
 	}
 

@@ -22,19 +22,21 @@ func NewPaymentPromisesHandler(paymentPromises *usecases.PaymentPromisesUsecase)
 
 // ListPaymentPromises handles GET /api/v1/collections/payment-promises
 func (h *PaymentPromisesHandler) ListPaymentPromises(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
 		return
 	}
+	if _, ok := middleware.EnforceAllRoles(c); !ok {
+		return
+	}
+	ctx := middleware.GetCognitoContext(c)
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 	if limit < 1 || limit > 500 {
-		limit = 20
+		limit = 50
 	}
 	if offset < 0 {
 		offset = 0

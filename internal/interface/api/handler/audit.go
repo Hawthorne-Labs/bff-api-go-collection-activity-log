@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/coreclient"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/middleware"
 )
 
 // AuditHandler handles audit log proxy endpoints.
@@ -23,10 +24,8 @@ func NewAuditHandler(core *coreclient.CoreClient) *AuditHandler {
 func (h *AuditHandler) Recent(c *gin.Context) {
 	traceID, _ := c.Get("trace_id")
 	tenantID := c.DefaultQuery("tenant_id", "default")
-	subject := c.GetString("user_id")
-	if subject == "" {
-		subject = "spa-user"
-	}
+	subject := auditSubject(c)
+	_ = subject
 
 	resp, err := h.core.ForwardGet(c.Request.Context(), "/api/v1/audit/recent",
 		map[string]string{"tenant_id": tenantID},
@@ -51,6 +50,7 @@ func (h *AuditHandler) ByEntity(c *gin.Context) {
 	}
 
 	traceID, _ := c.Get("trace_id")
+	_ = auditSubject(c)
 	resp, err := h.core.ForwardGet(c.Request.Context(), "/api/v1/audit/events",
 		map[string]string{"entity_id": entityID},
 		traceID.(string), c.GetString("request_id"), c.GetString("correlation_id"), c.GetHeader("traceparent"))
@@ -74,6 +74,7 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 	}
 
 	traceID, _ := c.Get("trace_id")
+	_ = auditSubject(c)
 	resp, err := h.core.ForwardGet(c.Request.Context(), "/api/v1/audit/integrity",
 		map[string]string{"entity_id": entityID},
 		traceID.(string), c.GetString("request_id"), c.GetString("correlation_id"), c.GetHeader("traceparent"))
@@ -85,4 +86,11 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 
 	body, _ := io.ReadAll(resp.Body)
 	c.Data(resp.StatusCode, "application/json", body)
+}
+
+func auditSubject(c *gin.Context) string {
+	if payload := middleware.SessionPayload(c); payload != nil && payload.Sub != "" {
+		return payload.Sub
+	}
+	return "spa-user"
 }

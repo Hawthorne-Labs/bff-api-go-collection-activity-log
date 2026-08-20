@@ -11,9 +11,11 @@ import (
 )
 
 func TestListActivitiesTargetsInternalActivitiesRoute(t *testing.T) {
-	var gotPath string
+	var gotPath, gotQuery, gotAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		gotAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[]}`))
 	}))
@@ -46,6 +48,9 @@ func TestListActivitiesTargetsInternalActivitiesRoute(t *testing.T) {
 	}
 	if gotPath != "/internal/v1/activities" {
 		t.Fatalf("expected /internal/v1/activities, got %q", gotPath)
+	}
+	if !strings.Contains(gotQuery, "loan_ids=loan-a") || !strings.HasPrefix(gotAuth, "Bearer ") {
+		t.Fatalf("expected encoded loan_ids and bearer auth, query=%q auth=%q", gotQuery, gotAuth)
 	}
 }
 

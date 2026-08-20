@@ -22,19 +22,21 @@ func NewEscalationsHandler(escalations *usecases.EscalationsUsecase) *Escalation
 
 // ListEscalations handles GET /api/v1/collections/escalations
 func (h *EscalationsHandler) ListEscalations(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
 		return
 	}
+	if _, ok := middleware.EnforceAllRoles(c); !ok {
+		return
+	}
+	ctx := middleware.GetCognitoContext(c)
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 	if limit < 1 || limit > 500 {
-		limit = 20
+		limit = 50
 	}
 	if offset < 0 {
 		offset = 0
@@ -61,11 +63,13 @@ func (h *EscalationsHandler) ListEscalations(c *gin.Context) {
 
 // CreateEscalation handles POST /api/v1/collections/escalations
 func (h *EscalationsHandler) CreateEscalation(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:write"); !ok {
 		return
 	}
+	if _, ok := middleware.EnforceAllRoles(c); !ok {
+		return
+	}
+	ctx := middleware.GetCognitoContext(c)
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
@@ -137,9 +141,11 @@ func (h *EscalationsHandler) CreateLoanEscalation(c *gin.Context) {
 
 // UpdateEscalationStatus handles PATCH /api/v1/collections/escalations/:id/status
 func (h *EscalationsHandler) UpdateEscalationStatus(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:write"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceSupervisorRoles(c)
+	if !ok {
 		return
 	}
 
@@ -168,9 +174,11 @@ func (h *EscalationsHandler) UpdateEscalationStatus(c *gin.Context) {
 
 // DecideEscalation handles POST /api/v1/collections/escalations/:id/decisions
 func (h *EscalationsHandler) DecideEscalation(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:write"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceSupervisorRoles(c)
+	if !ok {
 		return
 	}
 

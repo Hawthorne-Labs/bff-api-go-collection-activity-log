@@ -19,8 +19,8 @@ func NewNotificationsUsecase(core *coreclient.CoreClient, crypto *cryptobffclien
 }
 
 // ListNotifications lists notifications with filtering and pagination.
-func (u *NotificationsUsecase) ListNotifications(ctx context.Context, state, severity, fromDate, toDate string, limit int, beforeID string, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.ListNotifications(ctx, traceID, tenantID, userEmail, state, severity, fromDate, toDate, limit, beforeID)
+func (u *NotificationsUsecase) ListNotifications(ctx context.Context, state, severity, fromDate, toDate string, limit int, beforeAt, beforeID string, traceID, tenantID, userEmail string) (map[string]any, error) {
+	return u.core.ListNotifications(ctx, traceID, tenantID, userEmail, state, severity, fromDate, toDate, limit, beforeAt, beforeID)
 }
 
 // NotificationEventsAfter gets notification events after a given event ID.
@@ -49,7 +49,7 @@ func (u *NotificationsUsecase) GetDetail(ctx context.Context, notificationID, tr
 }
 
 // MarkAllRead marks all notifications as read.
-func (u *NotificationsUsecase) MarkAllRead(ctx context.Context, traceID, tenantID, userEmail string) error {
+func (u *NotificationsUsecase) MarkAllRead(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
 	return u.core.MarkAllNotificationsRead(ctx, traceID, tenantID, userEmail)
 }
 

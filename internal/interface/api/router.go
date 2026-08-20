@@ -3,11 +3,14 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	activityhandler "github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/handler"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/session"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/middleware"
 )
 
 // RegisterRoutes registers all API routes on the Gin engine.
 func RegisterRoutes(
 	r *gin.Engine,
+	sessionStore *session.Store,
 	activities *activityhandler.ActivitiesHandler,
 	escalations *activityhandler.EscalationsHandler,
 	paymentPromises *activityhandler.PaymentPromisesHandler,
@@ -17,15 +20,18 @@ func RegisterRoutes(
 	auth *activityhandler.AuthHandler,
 	health *activityhandler.HealthHandler,
 	cryptoSession *activityhandler.CryptoSessionHandler,
+	cryptoProxy *activityhandler.CryptoProxyHandler,
 	audit *activityhandler.AuditHandler,
 	contacts *activityhandler.ContactsHandler,
 ) {
+	sessionRequired := middleware.RequireSession(sessionStore)
+
 	// Health
 	r.GET("/health", health.Check)
 	r.GET("/health/live", health.Liveness)
 	r.GET("/health/ready", health.Readiness)
 
-	// Crypto session handshake (proxied to crypto-bff)
+	// Crypto session handshake (Cognito + enc:v1)
 	r.POST("/api/v1/collections/crypto-session", cryptoSession.Handshake)
 
 	// Auth routes
@@ -76,11 +82,12 @@ func RegisterRoutes(
 	// M2M (machine-to-machine)
 	r.GET("/api/m2m/whoami", activityhandler.M2MWhoami)
 
-	// Audit routes
-	r.GET("/api/v1/audit/recent", audit.Recent)
-	r.GET("/api/v1/audit/events", audit.ByEntity)
-	r.GET("/api/v1/audit/integrity", audit.Integrity)
-
-	// Contacts
-	r.POST("/api/v1/contacts", contacts.SubmitContact)
+	// Cookie-session routes (Python require_session)
+	sessionRoutes := r.Group("")
+	sessionRoutes.Use(sessionRequired)
+	sessionRoutes.POST("/api/v1/crypto/handshake", cryptoProxy.ProxyHandshake)
+	sessionRoutes.GET("/api/v1/audit/recent", audit.Recent)
+	sessionRoutes.GET("/api/v1/audit/events", audit.ByEntity)
+	sessionRoutes.GET("/api/v1/audit/integrity", audit.Integrity)
+	sessionRoutes.POST("/api/v1/contacts", contacts.SubmitContact)
 }

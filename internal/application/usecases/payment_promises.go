@@ -18,7 +18,9 @@ func NewPaymentPromisesUsecase(core *coreclient.CoreClient, crypto *cryptobffcli
 	return &PaymentPromisesUsecase{core: core, crypto: crypto}
 }
 
+const paymentPromiseActivityType = "promise_to_pay"
+
 // ListPaymentPromises lists payment promises with filtering.
 func (u *PaymentPromisesUsecase) ListPaymentPromises(ctx context.Context, loanID, clientID, agentID, agentName string, limit, offset int, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.ListActivities(ctx, traceID, tenantID, loanID, nil, clientID, agentID, agentName, "payment_promise", userEmail, limit, offset)
+	return u.core.ListActivities(ctx, traceID, tenantID, loanID, nil, clientID, agentID, agentName, paymentPromiseActivityType, userEmail, limit, offset)
 }
