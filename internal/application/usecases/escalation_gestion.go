@@ -113,9 +113,25 @@ func isManagementActivity(item map[string]any) bool {
 }
 
 func isEffectiveActivity(item map[string]any) bool {
-	value := pickActivityField(item, "answered", "Answered")
-	answered, ok := value.(bool)
-	return ok && answered
+	return isTruthyAnswered(pickActivityField(item, "answered", "Answered"))
+}
+
+func isTruthyAnswered(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		normalized := strings.ToLower(strings.TrimSpace(typed))
+		return normalized == "true" || normalized == "1" || normalized == "t"
+	case float64:
+		return typed == 1
+	case int:
+		return typed == 1
+	case int64:
+		return typed == 1
+	default:
+		return false
+	}
 }
 
 func pickActivityField(item map[string]any, keys ...string) any {

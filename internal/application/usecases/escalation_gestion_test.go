@@ -15,4 +15,13 @@ func TestIsEffectiveActivityRequiresAnsweredTrue(t *testing.T) {
 	if isEffectiveActivity(map[string]any{"answered": false}) {
 		t.Fatal("answered=false must not be effective")
 	}
+	if !isEffectiveActivity(map[string]any{"answered": "true"}) {
+		t.Fatal("answered=\"true\" must be effective after JSON/crypto decode")
+	}
+	if !isEffectiveActivity(map[string]any{"answered": float64(1)}) {
+		t.Fatal("answered=1 must be effective after JSON decode")
+	}
+	if isEffectiveActivity(map[string]any{"answered": "false"}) {
+		t.Fatal("answered=\"false\" must not be effective")
+	}
 }
