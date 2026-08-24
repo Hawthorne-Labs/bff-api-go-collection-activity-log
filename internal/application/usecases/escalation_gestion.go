@@ -8,10 +8,12 @@ import (
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/domain"
 )
 
-const escalationRequiresEffectiveGestion = 5015
+const escalationRequiresManagement = 5015
 
 var nonManagementActivityTypes = map[string]struct{}{
-	"escalation": {},
+	"escalation":          {},
+	"escalation_decision": {},
+	"payment":             {},
 }
 
 func (u *EscalationsUsecase) prepareCreatePayload(
@@ -41,8 +43,8 @@ func (u *EscalationsUsecase) prepareCreatePayload(
 	if _, ok := stringField(out, "last_effective_activity_id"); ok {
 		return out, nil
 	}
-	// anti-regresion: BUG-0002 ver handoffs/regressions.md (no revertir sin leer)
-	activityID, err := u.requireLastEffectiveGestion(ctx, out, traceID, tenantID, userEmail)
+	// anti-regresion: BUG-0002/BUG-0920 ver handoffs/regressions.md (no revertir sin leer)
+	activityID, err := u.requireLastManagement(ctx, out, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +52,7 @@ func (u *EscalationsUsecase) prepareCreatePayload(
 	return out, nil
 }
 
-func (u *EscalationsUsecase) requireLastEffectiveGestion(
+func (u *EscalationsUsecase) requireLastManagement(
 	ctx context.Context,
 	payload map[string]any,
 	traceID, tenantID, userEmail string,
@@ -64,7 +66,7 @@ func (u *EscalationsUsecase) requireLastEffectiveGestion(
 		return "", err
 	}
 	for _, item := range activityItems(page) {
-		if !isManagementActivity(item) || !isEffectiveActivity(item) {
+		if !isEscalationManagementActivity(item) {
 			continue
 		}
 		if id := activityID(item); id != "" {
@@ -72,8 +74,8 @@ func (u *EscalationsUsecase) requireLastEffectiveGestion(
 		}
 	}
 	return "", domain.NewBusinessError(
-		escalationRequiresEffectiveGestion,
-		"Debe existir una gestion efectiva antes de escalar el caso.",
+		escalationRequiresManagement,
+		"Debe existir una gestion previa antes de escalar el caso.",
 	)
 }
 
@@ -112,26 +114,8 @@ func isManagementActivity(item map[string]any) bool {
 	return agentName != "sistema"
 }
 
-func isEffectiveActivity(item map[string]any) bool {
-	return isTruthyAnswered(pickActivityField(item, "answered", "Answered"))
-}
-
-func isTruthyAnswered(value any) bool {
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	case string:
-		normalized := strings.ToLower(strings.TrimSpace(typed))
-		return normalized == "true" || normalized == "1" || normalized == "t"
-	case float64:
-		return typed == 1
-	case int:
-		return typed == 1
-	case int64:
-		return typed == 1
-	default:
-		return false
-	}
+func isEscalationManagementActivity(item map[string]any) bool {
+	return isManagementActivity(item)
 }
 
 func pickActivityField(item map[string]any, keys ...string) any {

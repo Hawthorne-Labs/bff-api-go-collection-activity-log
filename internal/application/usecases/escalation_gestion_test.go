@@ -8,20 +8,14 @@ func TestIsManagementActivitySkipsEscalationRows(t *testing.T) {
 	}
 }
 
-func TestIsEffectiveActivityRequiresAnsweredTrue(t *testing.T) {
-	if !isEffectiveActivity(map[string]any{"answered": true}) {
-		t.Fatal("answered=true must be effective")
+func TestIsEscalationManagementActivityAllowsUnansweredHumanManagement(t *testing.T) {
+	if !isEscalationManagementActivity(map[string]any{"activity_type": "call", "agent_name": "Agente", "answered": false}) {
+		t.Fatal("an unanswered human management must permit escalation")
 	}
-	if isEffectiveActivity(map[string]any{"answered": false}) {
-		t.Fatal("answered=false must not be effective")
+	if isEscalationManagementActivity(map[string]any{"activity_type": "payment", "agent_name": "Agente"}) {
+		t.Fatal("payment rows must not count as human management")
 	}
-	if !isEffectiveActivity(map[string]any{"answered": "true"}) {
-		t.Fatal("answered=\"true\" must be effective after JSON/crypto decode")
-	}
-	if !isEffectiveActivity(map[string]any{"answered": float64(1)}) {
-		t.Fatal("answered=1 must be effective after JSON decode")
-	}
-	if isEffectiveActivity(map[string]any{"answered": "false"}) {
-		t.Fatal("answered=\"false\" must not be effective")
+	if isEscalationManagementActivity(map[string]any{"activity_type": "call", "agent_name": "Sistema"}) {
+		t.Fatal("system rows must not count as human management")
 	}
 }
