@@ -22,24 +22,7 @@ func (u *EscalationsUsecase) prepareCreatePayload(
 	traceID, tenantID, requestID, correlationID, traceparent, userEmail string,
 ) (map[string]any, error) {
 	out := mapCreateEscalationPayload(payload)
-	if reason, ok := stringField(out, "reason"); ok && reason != "" {
-		encrypted, err := u.crypto.EncryptFields(
-			ctx,
-			"POST",
-			"/api/v1/collections/escalations",
-			map[string]string{"notes": reason},
-			tenantID,
-			requestID,
-			correlationID,
-			traceparent,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("encrypt escalation notes: %w", err)
-		}
-		if cipher, ok := encrypted["notes"]; ok {
-			out["reason"] = cipher
-		}
-	}
+	// anti-regresion: BUG-0921 FLE ya descifra reason; Core recibe mTLS (no recifrar) ver handoffs/regressions/ (no revertir sin leer)
 	if _, ok := stringField(out, "last_effective_activity_id"); ok {
 		return out, nil
 	}
