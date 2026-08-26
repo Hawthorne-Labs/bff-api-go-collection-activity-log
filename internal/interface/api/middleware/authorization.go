@@ -55,7 +55,8 @@ func ResolveAgentID(ctx *CognitoContext, requested string) string {
 	if ctx == nil {
 		return strings.TrimSpace(requested)
 	}
-	if ctx.Role == "agent" {
+	// anti-regresion: BUG-0945 ver handoffs/regressions/BUG-0945-bff-resolve-agent-id-call-center.md (no revertir sin leer)
+	if ctx.Role == "agent" || ctx.Role == "call_center" {
 		return ctx.Sub
 	}
 	if trimmed := strings.TrimSpace(requested); trimmed != "" {
