@@ -11,9 +11,11 @@ import (
 )
 
 var (
-	allRoles         = []string{"agent", "supervisor", "manager", "admin", "auditor", "call_center"}
-	supervisorRoles  = []string{"supervisor", "manager", "admin"}
-)
+		allRoles         = []string{"agent", "supervisor", "manager", "admin", "auditor", "call_center"}
+		supervisorRoles  = []string{"supervisor", "manager", "admin"}
+		// anti-regresion: BUG-0971 — agent/call_center need workload for Cobranza progress bar.
+		workloadRoles = []string{"agent", "call_center", "supervisor", "manager", "admin"}
+	)
 
 func RequireScope(c *gin.Context, required string) (*CognitoContext, bool) {
 	ctx := GetCognitoContext(c)
@@ -48,8 +50,12 @@ func EnforceAllRoles(c *gin.Context) (*CognitoContext, bool) {
 }
 
 func EnforceSupervisorRoles(c *gin.Context) (*CognitoContext, bool) {
-	return EnforceRole(c, supervisorRoles...)
-}
+		return EnforceRole(c, supervisorRoles...)
+	}
+
+	func EnforceWorkloadRoles(c *gin.Context) (*CognitoContext, bool) {
+		return EnforceRole(c, workloadRoles...)
+	}
 
 func ResolveAgentID(ctx *CognitoContext, requested string) string {
 	if ctx == nil {

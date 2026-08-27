@@ -115,7 +115,8 @@ func (h *AgentPerformanceHandler) GetWorkload(c *gin.Context) {
 	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
 		return
 	}
-	ctx, ok := middleware.EnforceSupervisorRoles(c)
+	// anti-regresion: BUG-0971 — Cobranza progress bar for agent/call_center.
+	ctx, ok := middleware.EnforceWorkloadRoles(c)
 	if !ok {
 		return
 	}
