@@ -15,33 +15,45 @@ func translateCoreError(statusCode int, body []byte) *domain.BusinessError {
 	switch statusCode {
 	case http.StatusGatewayTimeout:
 		return &domain.BusinessError{
-			Code:    domain.CollectionsRequestFailed,
-			Message: detail,
+			Code:       domain.CollectionsRequestFailed,
+			Message:    detail,
+			HTTPStatus: http.StatusGatewayTimeout,
 		}
 	case http.StatusNotFound:
 		return &domain.BusinessError{
-			Code:    code,
-			Message: detail,
+			Code:       code,
+			Message:    detail,
+			HTTPStatus: http.StatusNotFound,
 		}
 	case http.StatusConflict:
 		return &domain.BusinessError{
-			Code:    code,
-			Message: detail,
+			Code:       code,
+			Message:    detail,
+			HTTPStatus: http.StatusConflict,
 		}
 	case http.StatusForbidden:
 		return &domain.BusinessError{
-			Code:    domain.AccessDenied,
-			Message: "No tiene permisos para realizar esta acción.",
+			Code:       domain.AccessDenied,
+			Message:    "No tiene permisos para realizar esta acción.",
+			HTTPStatus: http.StatusForbidden,
 		}
-	case http.StatusBadRequest:
+	case http.StatusUnauthorized:
 		return &domain.BusinessError{
-			Code:    code,
-			Message: detail,
+			Code:       domain.InvalidAuthToken,
+			Message:    "El token de acceso no es válido.",
+			HTTPStatus: http.StatusUnauthorized,
+		}
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return &domain.BusinessError{
+			Code:       code,
+			Message:    detail,
+			HTTPStatus: statusCode,
 		}
 	default:
 		return &domain.BusinessError{
-			Code:    domain.CollectionsRequestFailed,
-			Message: detail,
+			Code:       domain.CollectionsRequestFailed,
+			Message:    detail,
+			HTTPStatus: http.StatusBadGateway,
 		}
 	}
 }

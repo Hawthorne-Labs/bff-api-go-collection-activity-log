@@ -38,11 +38,7 @@ func (h *AgentPerformanceHandler) GetKPIs(c *gin.Context) {
 
 	result, err := h.agentPerformance.GetKPIs(c.Request.Context(), agentID, day, traceID.(string), tenantID.(string))
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.AgentKPIsFailed, "message": "No se pudieron cargar los KPIs del agente."}})
+		writeErr(c, err, domain.AgentKPIsFailed, "No se pudieron cargar los KPIs del agente.")
 		return
 	}
 
@@ -66,11 +62,7 @@ func (h *AgentPerformanceHandler) GetGoals(c *gin.Context) {
 
 	result, err := h.agentPerformance.GetGoals(c.Request.Context(), agentID, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.AgentGoalsFailed, "message": "No se pudieron cargar las metas del agente."}})
+		writeErr(c, err, domain.AgentGoalsFailed, "No se pudieron cargar las metas del agente.")
 		return
 	}
 
@@ -99,11 +91,7 @@ func (h *AgentPerformanceHandler) GetRanking(c *gin.Context) {
 
 	result, err := h.agentPerformance.GetRanking(c.Request.Context(), day, limit, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.AgentRankingFailed, "message": "No se pudo cargar el ranking de agentes."}})
+		writeErr(c, err, domain.AgentRankingFailed, "No se pudo cargar el ranking de agentes.")
 		return
 	}
 
@@ -126,11 +114,7 @@ func (h *AgentPerformanceHandler) GetWorkload(c *gin.Context) {
 
 	result, err := h.agentPerformance.GetWorkload(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.AgentWorkloadFailed, "message": "No se pudo cargar la carga de trabajo de agentes."}})
+		writeErr(c, err, domain.AgentWorkloadFailed, "No se pudo cargar la carga de trabajo de agentes.")
 		return
 	}
 
@@ -152,11 +136,7 @@ func (h *AgentPerformanceHandler) GetReport(c *gin.Context) {
 
 	result, err := h.agentPerformance.GetTeamReport(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.AgentReportFailed, "message": "No se pudo cargar el reporte de rendimiento del equipo."}})
+		writeErr(c, err, domain.AgentReportFailed, "No se pudo cargar el reporte de rendimiento del equipo.")
 		return
 	}
 

@@ -77,10 +77,14 @@ func CryptoSettingsFromEnv() *CryptoSettings {
 	}
 }
 
-// Policy returns the effective crypto policy including default notification rule.
+// Policy returns the effective crypto policy including defaults.
 func (s *CryptoSettings) Policy() *CryptoPolicy {
 	entries := [][4]any{
 		{"PUT", "/api/v1/notifications/devices/current", true, false},
+		// session-patch: require crypto session headers, no field decrypt/encrypt
+		{"PATCH", "/api/v1/collections/escalations/{escalationId}/status", false, false},
+		{"PATCH", "/api/v1/collections/escalations/{escalation_id}/status", false, false},
+		{"PATCH", "/api/v1/collections/escalations/{id}/status", false, false},
 	}
 	entries = append(entries, s.Endpoints...)
 	return FromEntries(entries)

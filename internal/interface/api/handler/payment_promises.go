@@ -49,11 +49,7 @@ func (h *PaymentPromisesHandler) ListPaymentPromises(c *gin.Context) {
 
 	result, err := h.paymentPromises.ListPaymentPromises(c.Request.Context(), loanID, clientID, agentID, agentName, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.PaymentPromisesListFailed, "message": "No se pudo cargar la lista de promesas de pago."}})
+		writeErr(c, err, domain.PaymentPromisesListFailed, "No se pudo cargar la lista de promesas de pago.")
 		return
 	}
 

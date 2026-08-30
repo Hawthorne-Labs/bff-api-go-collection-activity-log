@@ -86,7 +86,7 @@ func (h *ContactsHandler) SubmitContact(c *gin.Context) {
 	email, _ := plaintext["email"].(string)
 	message, _ := plaintext["message"].(string)
 	if name == "" || email == "" || message == "" {
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.ContactSubmitFailed, "message": "Los campos name, email y message son obligatorios."}})
+		writeAPIError(c, http.StatusUnprocessableEntity, domain.ValidationError, "Los campos name, email y message son obligatorios.")
 		return
 	}
 	if len(name) > contactMaxName {
@@ -120,11 +120,7 @@ func (h *ContactsHandler) SubmitContact(c *gin.Context) {
 		c.GetHeader("traceparent"),
 	)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusBadGateway, gin.H{"detail": "core-api error"})
+		writeErr(c, err, domain.ContactSubmitFailed, "No se pudo enviar la solicitud de contacto.")
 		return
 	}
 

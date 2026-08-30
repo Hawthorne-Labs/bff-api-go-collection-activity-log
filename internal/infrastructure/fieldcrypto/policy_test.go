@@ -30,3 +30,22 @@ func TestDefaultPolicyIncludesNotificationDevicePut(t *testing.T) {
 		t.Fatal("expected decrypt-only default notification rule")
 	}
 }
+
+func TestDefaultPolicyEscalationStatusIsSessionPatch(t *testing.T) {
+	settings := &CryptoSettings{Enabled: true}
+	rule := settings.Policy().Resolve("PATCH", "/api/v1/collections/escalations/esc-1/status")
+	if rule == nil {
+		t.Fatal("expected session-patch rule for escalation status")
+	}
+	if rule.DecryptRequest || rule.EncryptResponse {
+		t.Fatalf("session-patch must be none:none, got decrypt=%v encrypt=%v", rule.DecryptRequest, rule.EncryptResponse)
+	}
+}
+
+func TestDefaultPolicyDoesNotCoverMedia(t *testing.T) {
+	settings := &CryptoSettings{Enabled: true}
+	policy := settings.Policy()
+	if policy.Resolve("GET", "/api/v1/collections/clients/c1/media") != nil {
+		t.Fatal("media must remain without activity-log FLE policy")
+	}
+}

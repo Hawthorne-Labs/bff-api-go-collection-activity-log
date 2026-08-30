@@ -17,6 +17,27 @@ func TestMapNotificationItemAcceptsCorePascalCase(t *testing.T) {
 	}
 }
 
+func TestMapNotificationDetailPassesClientName(t *testing.T) {
+	got := mapNotificationDetail(map[string]any{
+		"ID":         "n-2",
+		"ClientName": "Cliente Demo",
+		"Severity":   "INFO",
+		"CreatedAt":  "2026-08-30T00:00:00Z",
+	})
+	if got["client_name"] != "Cliente Demo" {
+		t.Fatalf("expected client_name from ClientName, got %#v", got["client_name"])
+	}
+	gotSnake := mapNotificationDetail(map[string]any{
+		"id":          "n-3",
+		"client_name": "Otro Cliente",
+		"severity":    "INFO",
+		"created_at":  "2026-08-30T00:00:00Z",
+	})
+	if gotSnake["client_name"] != "Otro Cliente" {
+		t.Fatalf("expected client_name snake_case, got %#v", gotSnake["client_name"])
+	}
+}
+
 func TestNotificationCursorRoundTrip(t *testing.T) {
 	codec := newNotificationCursorCodec("dev-notification-cursor-secret")
 	cursor := codec.encode("2026-08-19T00:00:00Z", "n-1", "user@dev.io", "all", "", "", "")

@@ -32,11 +32,7 @@ func (h *DashboardHandler) GetSummary(c *gin.Context) {
 
 	result, err := h.dashboard.GetSummary(c.Request.Context(), tenantID.(string), traceID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.DashboardSummaryFailed, "message": "No se pudo cargar el resumen del dashboard."}})
+		writeErr(c, err, domain.DashboardSummaryFailed, "No se pudo cargar el resumen del dashboard.")
 		return
 	}
 
@@ -56,11 +52,7 @@ func (h *DashboardHandler) GetAlerts(c *gin.Context) {
 
 	result, err := h.dashboard.GetAlerts(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.DashboardAlertsFailed, "message": "No se pudieron cargar las alertas del dashboard."}})
+		writeErr(c, err, domain.DashboardAlertsFailed, "No se pudieron cargar las alertas del dashboard.")
 		return
 	}
 

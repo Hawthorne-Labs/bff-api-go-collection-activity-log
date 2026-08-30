@@ -50,11 +50,7 @@ func (h *EscalationsHandler) ListEscalations(c *gin.Context) {
 
 	result, err := h.escalations.ListEscalations(c.Request.Context(), loanID, clientID, agentID, agentName, status, limit, offset, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.EscalationListFailed, "message": "No se pudo cargar la lista de escalamientos."}})
+		writeErr(c, err, domain.EscalationListFailed, "No se pudo cargar la lista de escalamientos.")
 		return
 	}
 
@@ -87,11 +83,7 @@ func (h *EscalationsHandler) CreateEscalation(c *gin.Context) {
 
 	result, err := h.escalations.CreateEscalation(c.Request.Context(), payload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.EscalationCreateFailed, "message": "No se pudo crear el escalamiento."}})
+		writeErr(c, err, domain.EscalationCreateFailed, "No se pudo crear el escalamiento.")
 		return
 	}
 
@@ -128,11 +120,7 @@ func (h *EscalationsHandler) CreateLoanEscalation(c *gin.Context) {
 
 	result, err := h.escalations.CreateEscalation(c.Request.Context(), payload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.EscalationCreateFailed, "message": "No se pudo crear el escalamiento del préstamo."}})
+		writeErr(c, err, domain.EscalationCreateFailed, "No se pudo crear el escalamiento del préstamo.")
 		return
 	}
 
@@ -161,11 +149,7 @@ func (h *EscalationsHandler) UpdateEscalationStatus(c *gin.Context) {
 
 	result, err := h.escalations.UpdateEscalationStatus(c.Request.Context(), escalationID, payload, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.EscalationUpdateFailed, "message": "No se pudo actualizar el estado del escalamiento."}})
+		writeErr(c, err, domain.EscalationUpdateFailed, "No se pudo actualizar el estado del escalamiento.")
 		return
 	}
 
@@ -194,11 +178,7 @@ func (h *EscalationsHandler) DecideEscalation(c *gin.Context) {
 
 	result, err := h.escalations.DecideEscalation(c.Request.Context(), escalationID, payload, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.EscalationDecideFailed, "message": "No se pudo registrar la decisión del escalamiento."}})
+		writeErr(c, err, domain.EscalationDecideFailed, "No se pudo registrar la decisión del escalamiento.")
 		return
 	}
 

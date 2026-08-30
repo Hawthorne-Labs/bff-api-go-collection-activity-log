@@ -91,6 +91,7 @@ func mapNotificationDetail(item map[string]any) map[string]any {
 		"destination":    notificationString(item, "destination", "Destination"),
 		"actor_name":     notificationStringOrNil(item, "actor_name", "ActorName"),
 		"actor_role":     notificationStringOrNil(item, "actor_role", "ActorRole"),
+		"client_name":    notificationStringOrNil(item, "client_name", "ClientName"),
 		"loan_reference": notificationStringOrNil(item, "loan_reference", "LoanReference"),
 		"description":    notificationStringOrNil(item, "description", "Description"),
 		"result":         notificationStringOrNil(item, "result", "Result"),

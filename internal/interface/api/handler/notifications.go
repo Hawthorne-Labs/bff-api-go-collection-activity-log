@@ -77,11 +77,7 @@ func (h *NotificationsHandler) ListNotifications(c *gin.Context) {
 
 	result, err := h.notifications.ListNotifications(c.Request.Context(), state, severity, fromDate, toDate, limit, beforeAt, beforeID, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationsListFailed, "message": "No se pudo cargar la lista de notificaciones."}})
+		writeErr(c, err, domain.NotificationsListFailed, "No se pudo cargar la lista de notificaciones.")
 		return
 	}
 
@@ -129,11 +125,7 @@ func (h *NotificationsHandler) NotificationEventsAfter(c *gin.Context) {
 
 	result, err := h.notifications.NotificationEventsAfter(c.Request.Context(), strconv.Itoa(lastID), limit, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationsListFailed, "message": "No se pudo cargar los eventos de notificaciones."}})
+		writeErr(c, err, domain.NotificationsListFailed, "No se pudo cargar los eventos de notificaciones.")
 		return
 	}
 
@@ -182,11 +174,7 @@ func (h *NotificationsHandler) UnreadCount(c *gin.Context) {
 
 	result, err := h.notifications.UnreadCount(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationsListFailed, "message": "No se pudo obtener el conteo de no leídas."}})
+		writeErr(c, err, domain.NotificationsListFailed, "No se pudo obtener el conteo de no leídas.")
 		return
 	}
 
@@ -212,11 +200,7 @@ func (h *NotificationsHandler) RegisterDevice(c *gin.Context) {
 
 	_, err := h.notifications.RegisterDevice(c.Request.Context(), payload, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationRegisterFailed, "message": "No se pudo registrar el dispositivo."}})
+		writeErr(c, err, domain.NotificationRegisterFailed, "No se pudo registrar el dispositivo.")
 		return
 	}
 
@@ -242,11 +226,7 @@ func (h *NotificationsHandler) RevokeDevice(c *gin.Context) {
 
 	err := h.notifications.RevokeDevice(c.Request.Context(), installationID, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationRevokeFailed, "message": "No se pudo revocar el dispositivo."}})
+		writeErr(c, err, domain.NotificationRevokeFailed, "No se pudo revocar el dispositivo.")
 		return
 	}
 
@@ -267,11 +247,7 @@ func (h *NotificationsHandler) GetDetail(c *gin.Context) {
 
 	result, err := h.notifications.GetDetail(c.Request.Context(), notificationID, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationDetailFailed, "message": "No se pudo obtener el detalle de la notificación."}})
+		writeErr(c, err, domain.NotificationDetailFailed, "No se pudo obtener el detalle de la notificación.")
 		return
 	}
 
@@ -295,11 +271,7 @@ func (h *NotificationsHandler) MarkAllRead(c *gin.Context) {
 
 	result, err := h.notifications.MarkAllRead(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationReadFailed, "message": "No se pudieron marcar las notificaciones como leídas."}})
+		writeErr(c, err, domain.NotificationReadFailed, "No se pudieron marcar las notificaciones como leídas.")
 		return
 	}
 
@@ -320,11 +292,7 @@ func (h *NotificationsHandler) MarkRead(c *gin.Context) {
 
 	err := h.notifications.MarkRead(c.Request.Context(), notificationID, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.NotificationReadFailed, "message": "No se pudo marcar la notificación como leída."}})
+		writeErr(c, err, domain.NotificationReadFailed, "No se pudo marcar la notificación como leída.")
 		return
 	}
 

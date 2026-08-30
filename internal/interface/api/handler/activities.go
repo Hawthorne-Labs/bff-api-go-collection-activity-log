@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/application/usecases"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/domain"
+	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/idempotency"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api/middleware"
 )
 
@@ -57,11 +58,7 @@ func (h *ActivitiesHandler) ListActivities(c *gin.Context) {
 
 	result, err := h.activities.ListActivities(c.Request.Context(), loanID, loanIDs, clientID, agentID, agentName, activityType, resolvedPageSize, resolvedOffset, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.ActivitiesListFailed, "message": "No se pudo cargar la lista de actividades."}})
+		writeErr(c, err, domain.ActivitiesListFailed, "No se pudo cargar la lista de actividades.")
 		return
 	}
 
@@ -92,11 +89,7 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 
 	result, err := h.activities.CreateActivity(c.Request.Context(), payload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.ActivityCreateFailed, "message": "No se pudo crear la actividad."}})
+		writeErr(c, err, domain.ActivityCreateFailed, "No se pudo crear la actividad.")
 		return
 	}
 
@@ -149,11 +142,7 @@ func (h *ActivitiesHandler) CreateLoanActivity(c *gin.Context) {
 
 	result, err := h.activities.CreateActivity(c.Request.Context(), encryptedPayload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.ActivityCreateFailed, "message": "No se pudo crear la actividad."}})
+		writeErr(c, err, domain.ActivityCreateFailed, "No se pudo crear la actividad.")
 		return
 	}
 
@@ -162,9 +151,11 @@ func (h *ActivitiesHandler) CreateLoanActivity(c *gin.Context) {
 
 // CreateActivityBatch handles POST /api/v1/collections/activities/batch
 func (h *ActivitiesHandler) CreateActivityBatch(c *gin.Context) {
-	ctx := middleware.GetCognitoContext(c)
-	if ctx == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": map[string]any{"code": domain.InvalidAuthToken, "message": "El token de acceso no es válido."}})
+	if _, ok := middleware.RequireScope(c, "collections:write"); !ok {
+		return
+	}
+	ctx, ok := middleware.EnforceAllRoles(c)
+	if !ok {
 		return
 	}
 
@@ -173,22 +164,49 @@ func (h *ActivitiesHandler) CreateActivityBatch(c *gin.Context) {
 
 	var payload map[string]any
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]any{"code": domain.ActivityBatchFailed, "message": "Payload inválido."}})
+		writeAPIError(c, http.StatusBadRequest, domain.ActivityBatchFailed, "Payload inválido.")
 		return
 	}
+
+	normalized, bizErr := normalizeActivityBatchPayload(payload)
+	if bizErr != nil {
+		writeErr(c, bizErr, domain.ValidationError, bizErr.Message)
+		return
+	}
+
+	clientKey, keyReason := idempotency.ValidateClientKey(c.GetHeader("Idempotency-Key"))
+	if keyReason == "required" {
+		writeAPIError(c, http.StatusBadRequest, domain.IdempotencyKeyRequired, "a valid Idempotency-Key header is required")
+		return
+	}
+	if keyReason == "invalid" {
+		writeAPIError(c, http.StatusBadRequest, domain.IdempotencyKeyInvalid, "a valid Idempotency-Key header is required")
+		return
+	}
+
+	payloadHash, err := idempotency.CanonicalHash(normalized)
+	if err != nil {
+		writeAPIError(c, http.StatusBadRequest, domain.ActivityBatchFailed, "Payload inválido.")
+		return
+	}
+	actor := ctx.Sub
+	if actor == "" {
+		actor = ctx.Email
+	}
+	if actor == "" {
+		actor = "anonymous"
+	}
+	normalized["idempotency_key"] = clientKey
+	normalized["payload_hash"] = payloadHash
+	normalized["idempotency_scope"] = idempotency.ScopeKey("activity-log", actor, http.MethodPost, c.Request.URL.Path)
 
 	requestID := c.GetHeader("X-Request-Id")
 	correlationID := c.GetHeader("X-Correlation-Id")
 	traceparent := c.GetHeader("traceparent")
-	idempotencyKey := c.GetHeader("Idempotency-Key")
 
-	result, err := h.activities.CreateActivityBatch(c.Request.Context(), payload, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, idempotencyKey, ctx.Email)
+	result, err := h.activities.CreateActivityBatch(c.Request.Context(), normalized, traceID.(string), tenantID.(string), requestID, correlationID, traceparent, clientKey, ctx.Email)
 	if err != nil {
-		if bizErr, ok := err.(*domain.BusinessError); ok {
-			c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": bizErr.Code, "message": bizErr.Message}})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"error": map[string]any{"code": domain.ActivityBatchFailed, "message": "No se pudo crear las actividades en lote."}})
+		writeErr(c, err, domain.ActivityBatchFailed, "No se pudo crear las actividades en lote.")
 		return
 	}
 
