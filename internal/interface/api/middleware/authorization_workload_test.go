@@ -14,7 +14,8 @@ func TestWorkloadRolesIncludeAgentAndCallCenter(t *testing.T) {
 	}
 	body := string(source)
 	for _, fragment := range []string{
-		`workloadRoles = []string{"agent", "call_center", "supervisor", "manager", "admin"}`,
+		`"agent", "call_center", "gestor_senior"`,
+		`"manager", "sub_gerente", "admin"`,
 		"EnforceWorkloadRoles",
 		"BUG-0971",
 	} {

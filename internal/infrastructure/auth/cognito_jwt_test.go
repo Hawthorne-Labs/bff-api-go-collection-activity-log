@@ -209,6 +209,28 @@ func TestCognitoGroupsAcceptsCommaSeparatedString(t *testing.T) {
 	}
 }
 
+func TestSubGerenteGetsManagerScopes(t *testing.T) {
+	// anti-regresion: BUG-1019 ver handoffs/regressions.md (no revertir sin leer)
+	key := testRSA(t)
+	validator := testValidator(t, key, nil, nil)
+	token := mintAccessToken(t, key, "test-key", jwt.MapClaims{
+		"email":          "subg@hawthorne.local",
+		"cognito:groups": []string{"sub_gerente"},
+	})
+	claims, err := validator.Validate(context.Background(), token)
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if claims.Role != "sub_gerente" {
+		t.Fatalf("expected sub_gerente role, got %+v", claims)
+	}
+	for _, scope := range []string{"collections:read", "collections:approve", "collections:escalate"} {
+		if _, ok := claims.Scopes[scope]; !ok {
+			t.Fatalf("expected scope %q for sub_gerente", scope)
+		}
+	}
+}
+
 func TestEmptyEmailIsNeverCached(t *testing.T) {
 	cache := NewInMemoryTtlIdentityEmailCache()
 	cache.Set("user-123", "")

@@ -11,11 +11,18 @@ import (
 )
 
 var (
-		allRoles         = []string{"agent", "supervisor", "manager", "admin", "auditor", "call_center"}
-		supervisorRoles  = []string{"supervisor", "manager", "admin"}
-		// anti-regresion: BUG-0971 — agent/call_center need workload for Cobranza progress bar.
-		workloadRoles = []string{"agent", "call_center", "supervisor", "manager", "admin"}
-	)
+	allRoles = []string{
+		"agent", "call_center", "gestor_senior", "supervisor", "especial",
+		"manager", "sub_gerente", "admin", "auditor",
+	}
+	// anti-regresion: BUG-1019 ver handoffs/regressions.md (no revertir sin leer)
+	supervisorRoles = []string{"supervisor", "manager", "admin", "sub_gerente", "especial"}
+	// anti-regresion: BUG-0971 — agent/call_center need workload for Cobranza progress bar.
+	workloadRoles = []string{
+		"agent", "call_center", "gestor_senior", "supervisor", "especial",
+		"manager", "sub_gerente", "admin",
+	}
+)
 
 func RequireScope(c *gin.Context, required string) (*CognitoContext, bool) {
 	ctx := GetCognitoContext(c)
@@ -62,7 +69,7 @@ func ResolveAgentID(ctx *CognitoContext, requested string) string {
 		return strings.TrimSpace(requested)
 	}
 	// anti-regresion: BUG-0945 ver handoffs/regressions/BUG-0945-bff-resolve-agent-id-call-center.md (no revertir sin leer)
-	if ctx.Role == "agent" || ctx.Role == "call_center" {
+	if ctx.Role == "agent" || ctx.Role == "call_center" || ctx.Role == "gestor_senior" {
 		return ctx.Sub
 	}
 	if trimmed := strings.TrimSpace(requested); trimmed != "" {
