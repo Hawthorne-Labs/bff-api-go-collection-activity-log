@@ -586,6 +586,19 @@ func (c *CoreClient) GetScopedGoals(ctx context.Context, traceID, tenantID, user
 	return c.get(ctx, "/internal/v1/kpis/goals", headers, nil)
 }
 
+// GetOperationsSummary gets the admin operations summary for a tenant/day.
+func (c *CoreClient) GetOperationsSummary(ctx context.Context, traceID, tenantID, userEmail, tenant, day string) (map[string]any, error) {
+	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
+	if err != nil {
+		return nil, err
+	}
+	params := map[string]string{"tenant": tenant}
+	if day != "" {
+		params["date"] = day
+	}
+	return c.get(ctx, "/internal/v1/kpis/operations-summary", headers, params)
+}
+
 // ListNotifications lists notifications with cursor pagination and filters.
 func (c *CoreClient) ListNotifications(ctx context.Context, traceID, tenantID, userEmail, state, severity, fromDate, toDate string, limit int, beforeAt, beforeID string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)

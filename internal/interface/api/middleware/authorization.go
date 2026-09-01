@@ -22,6 +22,7 @@ var (
 		"agent", "call_center", "gestor_senior", "supervisor", "especial",
 		"manager", "sub_gerente", "admin",
 	}
+	adminRoles = []string{"admin"}
 )
 
 func RequireScope(c *gin.Context, required string) (*CognitoContext, bool) {
@@ -57,12 +58,16 @@ func EnforceAllRoles(c *gin.Context) (*CognitoContext, bool) {
 }
 
 func EnforceSupervisorRoles(c *gin.Context) (*CognitoContext, bool) {
-		return EnforceRole(c, supervisorRoles...)
-	}
+	return EnforceRole(c, supervisorRoles...)
+}
 
-	func EnforceWorkloadRoles(c *gin.Context) (*CognitoContext, bool) {
-		return EnforceRole(c, workloadRoles...)
-	}
+func EnforceWorkloadRoles(c *gin.Context) (*CognitoContext, bool) {
+	return EnforceRole(c, workloadRoles...)
+}
+
+func EnforceAdminRoles(c *gin.Context) (*CognitoContext, bool) {
+	return EnforceRole(c, adminRoles...)
+}
 
 func ResolveAgentID(ctx *CognitoContext, requested string) string {
 	if ctx == nil {

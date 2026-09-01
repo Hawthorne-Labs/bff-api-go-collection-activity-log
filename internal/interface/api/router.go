@@ -64,6 +64,7 @@ func RegisterRoutes(
 	r.GET("/api/v1/collections/agent-performance/ranking", agentPerformance.GetRanking)
 	r.GET("/api/v1/collections/agent-performance/workload", agentPerformance.GetWorkload)
 	r.GET("/api/v1/collections/agent-performance/report", agentPerformance.GetReport)
+	r.GET("/api/v1/collections/agent-performance/operations-summary", agentPerformance.GetOperationsSummary)
 
 	// Dashboard routes
 	r.GET("/api/v1/collections/dashboard/summary", dashboard.GetSummary)

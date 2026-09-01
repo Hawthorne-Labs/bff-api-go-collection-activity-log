@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/application/usecases"
@@ -137,6 +138,37 @@ func (h *AgentPerformanceHandler) GetReport(c *gin.Context) {
 	result, err := h.agentPerformance.GetTeamReport(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
 		writeErr(c, err, domain.AgentReportFailed, "No se pudo cargar el reporte de rendimiento del equipo.")
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetOperationsSummary handles GET /api/v1/collections/agent-performance/operations-summary
+func (h *AgentPerformanceHandler) GetOperationsSummary(c *gin.Context) {
+	if _, ok := middleware.RequireScope(c, "collections:read"); !ok {
+		return
+	}
+	if _, ok := middleware.EnforceAdminRoles(c); !ok {
+		return
+	}
+	ctx := middleware.GetCognitoContext(c)
+
+	traceID, _ := c.Get("trace_id")
+	tenantID, _ := c.Get("tenant_id")
+	tenant := strings.TrimSpace(c.Query("tenant"))
+	day := strings.TrimSpace(c.Query("date"))
+
+	result, err := h.agentPerformance.GetOperationsSummary(
+		c.Request.Context(),
+		traceID.(string),
+		tenantID.(string),
+		ctx.Email,
+		tenant,
+		day,
+	)
+	if err != nil {
+		writeErr(c, err, domain.AgentOperationsSummaryFailed, "No se pudo cargar el resumen operativo por marca.")
 		return
 	}
 

@@ -43,6 +43,11 @@ func (u *AgentPerformanceUsecase) GetTeamReport(ctx context.Context, traceID, te
 	return u.core.GetTeamPerformanceReport(ctx, traceID, tenantID, userEmail)
 }
 
+// GetOperationsSummary gets the admin operations summary for a tenant/day.
+func (u *AgentPerformanceUsecase) GetOperationsSummary(ctx context.Context, traceID, tenantID, userEmail, tenant, day string) (map[string]any, error) {
+	return u.core.GetOperationsSummary(ctx, traceID, tenantID, userEmail, tenant, day)
+}
+
 // GetScopedGoals gets scoped goals for the current user/team.
 func (u *AgentPerformanceUsecase) GetScopedGoals(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
 	return u.core.GetScopedGoals(ctx, traceID, tenantID, userEmail)

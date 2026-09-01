@@ -21,7 +21,8 @@ const (
 	AgentGoalsFailed    = 5031
 	AgentRankingFailed  = 5032
 	AgentWorkloadFailed = 5033
-	AgentReportFailed   = 5034
+	AgentReportFailed              = 5034
+	AgentOperationsSummaryFailed   = 5035
 	// Notifications
 	NotificationsListFailed    = 5040
 	NotificationDetailFailed   = 5041
