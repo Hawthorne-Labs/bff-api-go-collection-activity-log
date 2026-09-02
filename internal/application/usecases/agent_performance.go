@@ -39,8 +39,8 @@ func (u *AgentPerformanceUsecase) GetWorkload(ctx context.Context, traceID, tena
 }
 
 // GetTeamReport gets the team performance report.
-func (u *AgentPerformanceUsecase) GetTeamReport(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.GetTeamPerformanceReport(ctx, traceID, tenantID, userEmail)
+func (u *AgentPerformanceUsecase) GetTeamReport(ctx context.Context, traceID, tenantID, userEmail, tenant string) (map[string]any, error) {
+	return u.core.GetTeamPerformanceReport(ctx, traceID, tenantID, userEmail, tenant)
 }
 
 // GetOperationsSummary gets the admin operations summary for a tenant/day.

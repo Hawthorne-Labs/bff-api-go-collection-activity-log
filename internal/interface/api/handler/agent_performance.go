@@ -134,8 +134,12 @@ func (h *AgentPerformanceHandler) GetReport(c *gin.Context) {
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
+	tenant := strings.TrimSpace(c.Query("tenant"))
+	if tenant == "" {
+		tenant = strings.TrimSpace(c.GetHeader("X-Tenant-Id"))
+	}
 
-	result, err := h.agentPerformance.GetTeamReport(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
+	result, err := h.agentPerformance.GetTeamReport(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email, tenant)
 	if err != nil {
 		writeErr(c, err, domain.AgentReportFailed, "No se pudo cargar el reporte de rendimiento del equipo.")
 		return

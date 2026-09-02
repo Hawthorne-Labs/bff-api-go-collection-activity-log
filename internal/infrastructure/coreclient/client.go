@@ -569,12 +569,16 @@ func (c *CoreClient) GetWorkload(ctx context.Context, traceID, tenantID, userEma
 }
 
 // GetTeamPerformanceReport gets the team performance report.
-func (c *CoreClient) GetTeamPerformanceReport(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
+func (c *CoreClient) GetTeamPerformanceReport(ctx context.Context, traceID, tenantID, userEmail, tenant string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/kpis/team-performance-report", headers, nil)
+	params := map[string]string{}
+	if trimmed := strings.TrimSpace(tenant); trimmed != "" {
+		params["tenant"] = trimmed
+	}
+	return c.get(ctx, "/internal/v1/kpis/team-performance-report", headers, params)
 }
 
 // GetScopedGoals gets scoped goals for the current user/team.
