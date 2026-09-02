@@ -24,8 +24,8 @@ func (u *AgentPerformanceUsecase) GetKPIs(ctx context.Context, agentID, day, tra
 }
 
 // GetGoals gets agent goals.
-func (u *AgentPerformanceUsecase) GetGoals(ctx context.Context, agentID, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.GetAgentGoals(ctx, agentID, traceID, tenantID, userEmail)
+func (u *AgentPerformanceUsecase) GetGoals(ctx context.Context, agentID, day, traceID, tenantID, userEmail string) (map[string]any, error) {
+	return u.core.GetAgentGoals(ctx, agentID, traceID, tenantID, userEmail, day)
 }
 
 // GetRanking gets the agent performance ranking.
@@ -34,13 +34,13 @@ func (u *AgentPerformanceUsecase) GetRanking(ctx context.Context, day string, li
 }
 
 // GetWorkload gets agent workload.
-func (u *AgentPerformanceUsecase) GetWorkload(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.GetWorkload(ctx, traceID, tenantID, userEmail)
+func (u *AgentPerformanceUsecase) GetWorkload(ctx context.Context, day, traceID, tenantID, userEmail string) (map[string]any, error) {
+	return u.core.GetWorkload(ctx, traceID, tenantID, userEmail, day)
 }
 
 // GetTeamReport gets the team performance report.
-func (u *AgentPerformanceUsecase) GetTeamReport(ctx context.Context, traceID, tenantID, userEmail, tenant string) (map[string]any, error) {
-	return u.core.GetTeamPerformanceReport(ctx, traceID, tenantID, userEmail, tenant)
+func (u *AgentPerformanceUsecase) GetTeamReport(ctx context.Context, traceID, tenantID, userEmail, tenant, day string) (map[string]any, error) {
+	return u.core.GetTeamPerformanceReport(ctx, traceID, tenantID, userEmail, tenant, day)
 }
 
 // GetOperationsSummary gets the admin operations summary for a tenant/day.
@@ -49,6 +49,6 @@ func (u *AgentPerformanceUsecase) GetOperationsSummary(ctx context.Context, trac
 }
 
 // GetScopedGoals gets scoped goals for the current user/team.
-func (u *AgentPerformanceUsecase) GetScopedGoals(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
-	return u.core.GetScopedGoals(ctx, traceID, tenantID, userEmail)
+func (u *AgentPerformanceUsecase) GetScopedGoals(ctx context.Context, day, traceID, tenantID, userEmail string) (map[string]any, error) {
+	return u.core.GetScopedGoals(ctx, traceID, tenantID, userEmail, day)
 }

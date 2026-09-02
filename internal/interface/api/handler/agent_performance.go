@@ -35,7 +35,7 @@ func (h *AgentPerformanceHandler) GetKPIs(c *gin.Context) {
 	tenantID, _ := c.Get("tenant_id")
 
 	agentID := middleware.ResolveAgentID(ctx, c.Query("agent_id"))
-	day := c.Query("day")
+	day := queryPerformanceDay(c)
 
 	result, err := h.agentPerformance.GetKPIs(c.Request.Context(), agentID, day, traceID.(string), tenantID.(string))
 	if err != nil {
@@ -60,8 +60,9 @@ func (h *AgentPerformanceHandler) GetGoals(c *gin.Context) {
 	tenantID, _ := c.Get("tenant_id")
 
 	agentID := middleware.ResolveAgentID(ctx, c.Query("agent_id"))
+	day := queryPerformanceDay(c)
 
-	result, err := h.agentPerformance.GetGoals(c.Request.Context(), agentID, traceID.(string), tenantID.(string), ctx.Email)
+	result, err := h.agentPerformance.GetGoals(c.Request.Context(), agentID, day, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
 		writeErr(c, err, domain.AgentGoalsFailed, "No se pudieron cargar las metas del agente.")
 		return
@@ -84,7 +85,7 @@ func (h *AgentPerformanceHandler) GetRanking(c *gin.Context) {
 	tenantID, _ := c.Get("tenant_id")
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	day := c.Query("day")
+	day := queryPerformanceDay(c)
 
 	if limit < 1 || limit > 100 {
 		limit = 10
@@ -112,8 +113,9 @@ func (h *AgentPerformanceHandler) GetWorkload(c *gin.Context) {
 
 	traceID, _ := c.Get("trace_id")
 	tenantID, _ := c.Get("tenant_id")
+	day := queryPerformanceDay(c)
 
-	result, err := h.agentPerformance.GetWorkload(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email)
+	result, err := h.agentPerformance.GetWorkload(c.Request.Context(), day, traceID.(string), tenantID.(string), ctx.Email)
 	if err != nil {
 		writeErr(c, err, domain.AgentWorkloadFailed, "No se pudo cargar la carga de trabajo de agentes.")
 		return
@@ -138,8 +140,9 @@ func (h *AgentPerformanceHandler) GetReport(c *gin.Context) {
 	if tenant == "" {
 		tenant = strings.TrimSpace(c.GetHeader("X-Tenant-Id"))
 	}
+	day := queryPerformanceDay(c)
 
-	result, err := h.agentPerformance.GetTeamReport(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email, tenant)
+	result, err := h.agentPerformance.GetTeamReport(c.Request.Context(), traceID.(string), tenantID.(string), ctx.Email, tenant, day)
 	if err != nil {
 		writeErr(c, err, domain.AgentReportFailed, "No se pudo cargar el reporte de rendimiento del equipo.")
 		return
@@ -177,4 +180,11 @@ func (h *AgentPerformanceHandler) GetOperationsSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+func queryPerformanceDay(c *gin.Context) string {
+	if day := strings.TrimSpace(c.Query("date")); day != "" {
+		return day
+	}
+	return strings.TrimSpace(c.Query("day"))
 }

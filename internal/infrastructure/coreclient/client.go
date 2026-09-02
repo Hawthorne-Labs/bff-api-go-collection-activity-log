@@ -536,12 +536,16 @@ func (c *CoreClient) GetAgentKPIs(ctx context.Context, agentID, traceID, tenantI
 }
 
 // GetAgentGoals gets agent goals.
-func (c *CoreClient) GetAgentGoals(ctx context.Context, agentID, traceID, tenantID, userEmail string) (map[string]any, error) {
+func (c *CoreClient) GetAgentGoals(ctx context.Context, agentID, traceID, tenantID, userEmail, day string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/kpis/agents/"+agentID+"/goals", headers, nil)
+	params := map[string]string{}
+	if day != "" {
+		params["date"] = day
+	}
+	return c.get(ctx, "/internal/v1/kpis/agents/"+agentID+"/goals", headers, params)
 }
 
 // GetRanking gets the agent performance ranking.
@@ -555,21 +559,26 @@ func (c *CoreClient) GetRanking(ctx context.Context, traceID, tenantID, day stri
 	}
 	if day != "" {
 		params["day"] = day
+		params["date"] = day
 	}
 	return c.get(ctx, "/internal/v1/kpis/ranking", headers, params)
 }
 
 // GetWorkload gets agent workload.
-func (c *CoreClient) GetWorkload(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
+func (c *CoreClient) GetWorkload(ctx context.Context, traceID, tenantID, userEmail, day string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/kpis/workload", headers, nil)
+	params := map[string]string{}
+	if day != "" {
+		params["date"] = day
+	}
+	return c.get(ctx, "/internal/v1/kpis/workload", headers, params)
 }
 
 // GetTeamPerformanceReport gets the team performance report.
-func (c *CoreClient) GetTeamPerformanceReport(ctx context.Context, traceID, tenantID, userEmail, tenant string) (map[string]any, error) {
+func (c *CoreClient) GetTeamPerformanceReport(ctx context.Context, traceID, tenantID, userEmail, tenant, day string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
@@ -578,16 +587,23 @@ func (c *CoreClient) GetTeamPerformanceReport(ctx context.Context, traceID, tena
 	if trimmed := strings.TrimSpace(tenant); trimmed != "" {
 		params["tenant"] = trimmed
 	}
+	if day != "" {
+		params["date"] = day
+	}
 	return c.get(ctx, "/internal/v1/kpis/team-performance-report", headers, params)
 }
 
 // GetScopedGoals gets scoped goals for the current user/team.
-func (c *CoreClient) GetScopedGoals(ctx context.Context, traceID, tenantID, userEmail string) (map[string]any, error) {
+func (c *CoreClient) GetScopedGoals(ctx context.Context, traceID, tenantID, userEmail, day string) (map[string]any, error) {
 	headers, err := c.authHeaders(ctx, traceID, tenantID, userEmail)
 	if err != nil {
 		return nil, err
 	}
-	return c.get(ctx, "/internal/v1/kpis/goals", headers, nil)
+	params := map[string]string{}
+	if day != "" {
+		params["date"] = day
+	}
+	return c.get(ctx, "/internal/v1/kpis/goals", headers, params)
 }
 
 // GetOperationsSummary gets the admin operations summary for a tenant/day.

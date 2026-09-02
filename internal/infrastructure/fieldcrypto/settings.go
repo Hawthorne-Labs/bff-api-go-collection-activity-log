@@ -85,6 +85,14 @@ func (s *CryptoSettings) Policy() *CryptoPolicy {
 		{"PATCH", "/api/v1/collections/escalations/{escalationId}/status", false, false},
 		{"PATCH", "/api/v1/collections/escalations/{escalation_id}/status", false, false},
 		{"PATCH", "/api/v1/collections/escalations/{id}/status", false, false},
+		// anti-regresion: desempeno agent-performance reads must encrypt responses even if
+		// CRYPTO_REQUIRED_ENDPOINTS env lags deploy (fixes CRYPTO_PLAINTEXT_REJECTED on Agentes tab).
+		{"GET", "/api/v1/collections/agent-performance/ranking", false, true},
+		{"GET", "/api/v1/collections/agent-performance/workload", false, true},
+		{"GET", "/api/v1/collections/agent-performance/operations-summary", false, true},
+		{"GET", "/api/v1/collections/agent-performance/goals", false, true},
+		{"GET", "/api/v1/collections/agent-performance/report", false, true},
+		{"GET", "/api/v1/collections/agent-performance/kpis", false, true},
 	}
 	entries = append(entries, s.Endpoints...)
 	return FromEntries(entries)
