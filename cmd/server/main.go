@@ -17,7 +17,9 @@ import (
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/config"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/coreclient"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/cryptobffclient"
+	activitiesinfra "github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/activities"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/fieldcrypto"
+	notificationsinfra "github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/notifications"
 	redisinfra "github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/redis"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/infrastructure/session"
 	"github.com/hawthorne/bff-api-go-collection-activity-log/internal/interface/api"
@@ -78,11 +80,13 @@ func main() {
 	cryptoClient := cryptobffclient.NewCryptoBFFClient(cfg)
 
 	// Initialize usecases
-	activitiesUC := usecases.NewActivitiesUsecase(coreClient, cryptoClient)
+	activityReadCache := activitiesinfra.NewReadCache(redisClient)
+	activitiesUC := usecases.NewActivitiesUsecase(coreClient, cryptoClient, activityReadCache)
 	escalationsUC := usecases.NewEscalationsUsecase(coreClient, cryptoClient)
 	paymentPromisesUC := usecases.NewPaymentPromisesUsecase(coreClient, cryptoClient)
 	agentPerformanceUC := usecases.NewAgentPerformanceUsecase(coreClient, cryptoClient)
-	notificationsUC := usecases.NewNotificationsUsecase(coreClient, cryptoClient)
+	notificationReadCache := notificationsinfra.NewReadCache(redisClient)
+	notificationsUC := usecases.NewNotificationsUsecase(coreClient, cryptoClient, notificationReadCache)
 	dashboardUC := usecases.NewDashboardUsecase(coreClient, cryptoClient)
 	contactsUC := usecases.NewContactsUsecase(coreClient, cryptoClient)
 

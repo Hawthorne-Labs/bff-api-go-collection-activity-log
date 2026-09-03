@@ -1,6 +1,6 @@
 module github.com/hawthorne/bff-api-go-collection-activity-log
 
-go 1.26.5
+go 1.27.1
 
 require (
 	github.com/Hawthorne-Labs/shared-observability-go v0.0.0-20260609163720-2a1936882c52
