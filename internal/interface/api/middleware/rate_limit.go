@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"strings"
@@ -19,13 +21,25 @@ func RateLimitMiddleware(store RateLimitStore, trustedProxies string, skipPrefix
 				return
 			}
 		}
-		clientIP := resolveClientIP(c.ClientIP(), c.GetHeader("X-Forwarded-For"), trusted)
-		if store == nil || store.Allow(clientIP+":"+path) {
+		principal := rateLimitPrincipal(c, trusted)
+		if store == nil || store.Allow(principal+":"+path) {
 			c.Next()
 			return
 		}
 		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": map[string]any{"code": 4290, "message": "Se excedió el límite de solicitudes."}})
 	}
+}
+
+// anti-regresion: BUG-1090 ver handoffs/regressions/ (no revertir sin leer)
+func rateLimitPrincipal(c *gin.Context, trusted map[string]struct{}) string {
+	if identity := GetCognitoContext(c); identity != nil {
+		if subject := strings.TrimSpace(identity.Sub); subject != "" {
+			digest := sha256.Sum256([]byte(subject))
+			return "sub:" + hex.EncodeToString(digest[:16])
+		}
+	}
+	clientIP := resolveClientIP(c.ClientIP(), c.GetHeader("X-Forwarded-For"), trusted)
+	return "ip:" + clientIP
 }
 
 func parseTrustedProxies(raw string) map[string]struct{} {

@@ -139,17 +139,17 @@ func main() {
 	r.Use(middleware.SecurityHeadersMiddleware())
 	r.Use(middleware.RequestTimeoutMiddleware(cfg.RequestTimeoutSeconds))
 	r.Use(middleware.RequireJSONContentType())
-	r.Use(middleware.RateLimitMiddleware(
-		middleware.NewMemoryRateLimitStore(cfg.RateLimitRequests, cfg.RateLimitWindowSec),
-		cfg.TrustedProxies,
-		cfg.RateLimitSkipPaths,
-	))
 	r.Use(middleware.RequestSizeLimitMiddleware(cfg.MaxRequestBodyBytes))
 	r.Use(middleware.CSRFMiddleware(sessionStore))
 
 	// Middleware pipeline
 	r.Use(middleware.TracingMiddleware())
 	r.Use(middleware.CognitoContextMiddleware(cognitoValidator))
+	r.Use(middleware.RateLimitMiddleware(
+		middleware.NewMemoryRateLimitStore(cfg.RateLimitRequests, cfg.RateLimitWindowSec),
+		cfg.TrustedProxies,
+		cfg.RateLimitSkipPaths,
+	))
 	r.Use(middleware.AuditMiddleware())
 	if cfg.CryptoEnabled {
 		cryptoSettings := fieldcrypto.CryptoSettingsFromEnv()
