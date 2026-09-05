@@ -79,4 +79,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/Hawthorne-Labs/shared-observability-go => ../shared-observability-go
+replace github.com/Hawthorne-Labs/shared-observability-go => ../../shared-observability-go
